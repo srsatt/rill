@@ -10,7 +10,14 @@
     "publishedAt": 1786964400,
     "editedAt": null,
     "deletedAt": null,
-    "externalUrls": ["https://example.com/story?x=1&y=2"],
+    "externalUrls": [
+      {
+        "url": "https://example.com/story?x=1&y=2",
+        "relation": "related",
+        "title": null,
+        "ordinal": 0
+      }
+    ],
     "media": [],
     "metadata": {
       "telegram": {

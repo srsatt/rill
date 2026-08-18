@@ -215,6 +215,7 @@ impl IntelligenceService {
             return Ok(cached);
         }
         let (positive, negative) = self.preference_centroids(user_id, &identity)?;
+        let preference = self.preference_model(user_id, &identity)?;
         let stream_vector = self.stream_vector(&stream.id, &identity)?;
         for candidate in &mut candidates {
             score_candidate(
@@ -224,6 +225,7 @@ impl IntelligenceService {
                 positive.as_deref(),
                 negative.as_deref(),
                 stream_vector.as_deref(),
+                preference.as_ref(),
             )?;
         }
         let selected = diversify(candidates, limit.min(100), user_id, slug);
@@ -231,77 +233,18 @@ impl IntelligenceService {
             user_id,
             stream_id: &stream.id,
             provider: "rill-local",
-            model: "fallback-ranker",
+            model: if preference.is_some() {
+                "preference-logistic"
+            } else {
+                "fallback-ranker"
+            },
             version: "1",
             limit,
             ui_mode,
             stories: &selected,
             replace_existing: false,
         })?;
-        let payload = EvaluateStreamPayload {
-            user_id: user_id.to_owned(),
-            slug: slug.to_owned(),
-            limit,
-            ui_mode: ui_mode.to_owned(),
-        };
-        if let Err(error) = self.jobs.enqueue_coalesced_queued(
-            JobKind::EvaluateStreamCandidates,
-            &serde_json::to_value(payload)?,
-            EnqueueOptions {
-                visibility_scope: Some(format!("user:{user_id}")),
-                priority: -5,
-                max_attempts: 3,
-                ..Default::default()
-            },
-        ) {
-            warn!(error = %error, %slug, "background stream ranking could not be queued");
-        }
         Ok(into_ranked_stories(selected))
-    }
-
-    pub async fn refresh_stream_ranking(
-        &self,
-        user_id: &str,
-        slug: &str,
-        limit: usize,
-        ui_mode: &str,
-    ) -> Result<(), IntelligenceError> {
-        self.ensure_home_stream(user_id)?;
-        let stream = self.load_stream(user_id, slug)?;
-        let identity = self.embedding.identity();
-        let mut candidates = self.load_candidates(user_id, &identity)?;
-        candidates.retain(|candidate| matches_filter(candidate, &stream.filter));
-        let (positive, negative) = self.preference_centroids(user_id, &identity)?;
-        let stream_vector = self.stream_vector(&stream.id, &identity)?;
-        for candidate in &mut candidates {
-            score_candidate(
-                candidate,
-                user_id,
-                &self.pool,
-                positive.as_deref(),
-                negative.as_deref(),
-                stream_vector.as_deref(),
-            )?;
-        }
-        let Some(provider) = self
-            .apply_external_ranker(user_id, &stream, &mut candidates, limit, ui_mode)
-            .await?
-        else {
-            return Ok(());
-        };
-        let selected = diversify(candidates, limit.min(100), user_id, slug);
-        self.persist_ranking(RankingPersistence {
-            user_id,
-            stream_id: &stream.id,
-            provider: &provider.provider,
-            model: &provider.model,
-            version: &provider.version,
-            limit,
-            ui_mode,
-            stories: &selected,
-            replace_existing: true,
-        })?;
-        Ok(())
     }
 
     fn load_stream(&self, user_id: &str, slug: &str) -> Result<StreamView, IntelligenceError> {

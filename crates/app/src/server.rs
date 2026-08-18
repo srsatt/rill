@@ -37,9 +37,7 @@ use rill_intelligence::{
     StoryVariantView, StreamFilter,
 };
 use rill_jobs::JobQueue;
-use rill_model_api::{
-    CollectionParserProvider, EmbeddingProvider, RecommendationProvider, SummaryProvider,
-};
+use rill_model_api::{CollectionParserProvider, EmbeddingProvider, SummaryProvider};
 use rill_plugin_host::{
     PluginError, PluginLimits, PluginPermission, PluginService, PluginSourceConfig,
 };
@@ -157,8 +155,11 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
             .configure_collection_parser(collection_parser);
     let embedding: Arc<dyn EmbeddingProvider> = models.embedding.clone();
     let summary: Arc<dyn SummaryProvider> = models.summary.clone();
-    let recommendation: Option<Arc<dyn RecommendationProvider>> = Some(models.ranking.clone());
-    let intelligence = IntelligenceService::new(pool.clone(), embedding, summary, recommendation);
+    let intelligence = IntelligenceService::new(pool.clone(), embedding, summary, None)
+        .configure_preference_model(
+            settings.recommendations.refit_batch_size,
+            settings.recommendations.fit_window,
+        );
     let secrets = env::var(&settings.secrets.master_key_env)
         .ok()
         .map(|key| SecretStore::from_base64(pool.clone(), &key, settings.secrets.key_version))

@@ -32,7 +32,9 @@ mod tests {
             body_text: Some("A useful report about SQLite query planning and performance.".into()),
             body_html: Some("<p>A useful report about SQLite query planning and performance.</p><script>bad()</script>".into()),
             author: Some("Ada".into()), source_url: Some(url.into()), published_at: Some(1_755_432_000),
-            edited_at: None, deleted_at: None, external_urls: vec![url.into()], media: Vec::new(),
+            edited_at: None, deleted_at: None, external_urls: vec![ExternalLink {
+                url: url.into(), relation: LinkRelation::alternate(), title: None, ordinal: 0,
+            }], media: Vec::new(),
             metadata: json!({"language":"en"}),
         }
     }
@@ -227,6 +229,7 @@ mod tests {
             author: Some("Publisher author".into()),
             publisher: Some("one.example".into()),
             canonical_url: Some("https://one.example/a".into()),
+            links: Vec::new(),
             language: Some("en".into()),
             published_at: Some(1_755_432_000),
         };

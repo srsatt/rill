@@ -290,7 +290,12 @@ impl IngestionService {
             published_at: article.document.published_at,
             edited_at: None,
             deleted_at: None,
-            external_urls: vec![payload.target_url.clone()],
+            external_urls: vec![ExternalLink {
+                url: payload.target_url.clone(),
+                relation: LinkRelation::alternate(),
+                title: None,
+                ordinal: 0,
+            }],
             media: Vec::new(),
             metadata: json!({ "parentRawItemId": payload.parent_raw_item_id }),
         };

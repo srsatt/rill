@@ -3,7 +3,7 @@ interface ActionView {
   name: string;
   enabled: boolean;
   event: string;
-  config: { url: string; method: string };
+  config: { url: string; method: string; bodyTemplate?: unknown };
   hasHeaders: boolean;
 }
 
@@ -37,7 +37,7 @@ function actionCard(action: ActionView, reload: () => Promise<void>): HTMLElemen
   card.append(
     node("h3", action.name),
     node("p", `${action.config.method} ${action.config.url}`),
-    node("p", `Runs on Favorite · private headers: ${action.hasHeaders ? "encrypted" : "none"}`),
+    node("p", `Runs on Favorite · ${action.config.bodyTemplate ? "custom JSON body" : "default event body"} · private headers: ${action.hasHeaders ? "encrypted" : "none"}`),
   );
   const toggle = node("button", action.enabled ? "Pause" : "Enable");
   toggle.type = "button";
@@ -81,11 +81,34 @@ export function activateUserSettings(): void {
     event.preventDefault();
     const data = new FormData(form);
     let headers: Record<string, string>;
+    let bodyTemplate: unknown = null;
     try {
       headers = JSON.parse(String(data.get("headers") || "{}")) as Record<string, string>;
     } catch {
       report("Private headers must be a JSON object.");
       return;
+    }
+    const rawTemplate = String(data.get("body_template") || "").trim();
+    if (rawTemplate) {
+      try {
+        bodyTemplate = JSON.parse(rawTemplate) as unknown;
+      } catch {
+        report("Body template must be valid JSON.");
+        return;
+      }
+    }
+    const headerEnv: Record<string, { env: string; prefix: string }> = {};
+    const headerEnvName = String(data.get("header_env") || "").trim();
+    const headerName = String(data.get("header_name") || "").trim();
+    if (headerEnvName) {
+      if (!headerName) {
+        report("Header name is required with an environment variable.");
+        return;
+      }
+      headerEnv[headerName] = {
+        env: headerEnvName,
+        prefix: String(data.get("header_prefix") || ""),
+      };
     }
     const response = await api("/api/v1/actions", {
       method: "POST",
@@ -97,7 +120,9 @@ export function activateUserSettings(): void {
         timeoutSeconds: 15,
         maximumResponseBytes: 65_536,
         maximumAttempts: 5,
+        bodyTemplate,
         headers,
+        headerEnv,
         enabled: true,
       }),
     });

@@ -118,6 +118,14 @@ impl Settings {
                 "jobs.concurrency must be between 1 and 32".to_owned(),
             ));
         }
+        if self.recommendations.refit_batch_size == 0
+            || self.recommendations.fit_window < self.recommendations.refit_batch_size
+            || self.recommendations.fit_window > 10_000
+        {
+            return Err(ConfigError::Invalid(
+                "recommendation refit batch/window limits are invalid".to_owned(),
+            ));
+        }
         if self.secrets.master_key_env.trim().is_empty() || self.secrets.key_version < 1 {
             return Err(ConfigError::Invalid(
                 "secrets master key environment name and key version are invalid".to_owned(),

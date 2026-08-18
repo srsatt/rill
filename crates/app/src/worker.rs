@@ -11,8 +11,7 @@ use rill_ingestion::{
     RawItemJobPayload,
 };
 use rill_intelligence::{
-    DocumentJobPayload, EvaluateStreamPayload, FeedbackDeliveryPayload, IntelligenceService,
-    StreamEmbeddingPayload,
+    DocumentJobPayload, IntelligenceService, PreferenceRefitPayload, StreamEmbeddingPayload,
 };
 use rill_jobs::{EnqueueOptions, Job, JobFailure, JobHandler, JobKind, JobQueue, Worker};
 use rill_plugin_host::{PluginService, PluginSourceConfig};
@@ -223,13 +222,7 @@ impl IngestionJobHandler {
                     .await
                     .map_err(failure)
             }
-            JobKind::SubmitRecommendationFeedback => {
-                let payload: FeedbackDeliveryPayload = decode(job)?;
-                self.intelligence
-                    .submit_feedback(&payload)
-                    .await
-                    .map_err(failure)
-            }
+            JobKind::SubmitRecommendationFeedback => Ok(()),
             JobKind::InvalidateRecommendations | JobKind::RecomputeAffinity => {
                 let payload: RecommendationMaintenancePayload = decode(job)?;
                 self.intelligence
@@ -237,16 +230,11 @@ impl IngestionJobHandler {
                     .map(|_| ())
                     .map_err(failure)
             }
-            JobKind::EvaluateStreamCandidates => {
-                let payload: EvaluateStreamPayload = decode(job)?;
+            JobKind::EvaluateStreamCandidates => Ok(()),
+            JobKind::RefitPreferenceModel => {
+                let payload: PreferenceRefitPayload = decode(job)?;
                 self.intelligence
-                    .refresh_stream_ranking(
-                        &payload.user_id,
-                        &payload.slug,
-                        payload.limit.min(100),
-                        &payload.ui_mode,
-                    )
-                    .await
+                    .refit_preference_model(&payload.user_id)
                     .map(|_| ())
                     .map_err(failure)
             }
@@ -314,9 +302,9 @@ const fn job_operation(kind: JobKind) -> &'static str {
         JobKind::ExtractArticle | JobKind::ProcessDerivedItem => "extraction",
         JobKind::GenerateEmbedding | JobKind::EmbedStream => "embedding",
         JobKind::GenerateSummary => "summary",
-        JobKind::EvaluateStreamCandidates | JobKind::SubmitRecommendationFeedback => {
-            "recommendation"
-        }
+        JobKind::EvaluateStreamCandidates
+        | JobKind::RefitPreferenceModel
+        | JobKind::SubmitRecommendationFeedback => "recommendation",
         JobKind::ExecuteAction | JobKind::RetryAction => "action",
         JobKind::CleanupSessions | JobKind::CleanupPairingCodes | JobKind::DatabaseMaintenance => {
             "maintenance"

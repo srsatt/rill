@@ -24,6 +24,10 @@ collection_parent_display_default = "children_only"
 collection_excluded_hosts = []
 collection_excluded_path_fragments = []
 
+[recommendations]
+refit_batch_size = 5
+fit_window = 500
+
 [secrets]
 master_key_env = "RILL_MASTER_KEY"
 key_version = 1

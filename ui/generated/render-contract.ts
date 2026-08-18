@@ -18,7 +18,9 @@ export type SourcesPageModel = { title: string, username: string, emailAvailable
 
 export type CuratorPathModel = { kind: string, curatorId: string, sourceName: string | null, curatorCommentary: string | null, parentTitle: string | null, parentUrl: string | null, };
 
-export type StoryVariantModel = { documentId: string, title: string, summary: string, bodyText: string, canonicalUrl: string | null, author: string | null, publisher: string | null, language: string | null, publishedAt: string | null, curators: Array<CuratorPathModel>, selected: boolean, };
+export type StoryLinkModel = { url: string, relation: string, title: string | null, };
+
+export type StoryVariantModel = { documentId: string, title: string, summary: string, bodyText: string, canonicalUrl: string | null, links: Array<StoryLinkModel>, author: string | null, publisher: string | null, language: string | null, publishedAt: string | null, curators: Array<CuratorPathModel>, selected: boolean, };
 
 export type StoryPageModel = { title: string, storyId: string, representative: StoryVariantModel, variants: Array<StoryVariantModel>, coverageCount: number, read: boolean, favorite: boolean, explicitFeedback: string | null, reader: boolean, };
 

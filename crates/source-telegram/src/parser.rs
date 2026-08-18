@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use chrono::DateTime;
-use rill_domain::{RawMedia, RawSourceItem};
+use rill_domain::{ExternalLink, LinkRelation, RawMedia, RawSourceItem};
 use rill_source_api::ConnectorError;
 use scraper::{ElementRef, Html, Selector};
 use serde_json::json;
@@ -46,7 +46,20 @@ fn parse_post(element: ElementRef<'_>, expected_username: &str) -> Option<Parsed
         .map(Html::parse_fragment)
         .map(|html| normalize_whitespace(&html.root_element().text().collect::<Vec<_>>().join(" ")))
         .filter(|text| !text.is_empty());
-    let external_urls = text_element.as_ref().map(extract_links).unwrap_or_default();
+    let external_urls = text_element
+        .as_ref()
+        .map(extract_links)
+        .unwrap_or_default()
+        .into_iter()
+        .take(16)
+        .enumerate()
+        .map(|(ordinal, url)| ExternalLink {
+            url,
+            relation: LinkRelation::new("related").expect("static relation"),
+            title: None,
+            ordinal: u32::try_from(ordinal).unwrap_or(u32::MAX),
+        })
+        .collect();
     let mut media = extract_media(element);
     if body_text.is_none() && media.is_empty() {
         return None;

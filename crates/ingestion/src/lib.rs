@@ -8,7 +8,7 @@ use rill_collection_expansion::{
 pub use rill_collection_expansion::{DetectionMode, ParentDisplayPolicy};
 use rill_db::{DbError, DbPool};
 use rill_dedup::{CuratorProvenance, DedupError, DedupService, canonicalize_url, content_checksum};
-use rill_domain::{ItemShape, NormalizedDocument, RawSourceItem};
+use rill_domain::{ExternalLink, ItemShape, LinkRelation, NormalizedDocument, RawSourceItem};
 use rill_extraction::ExtractedArticle;
 use rill_jobs::{EnqueueOptions, JobKind, JobQueue, QueueError};
 use rill_model_api::{CollectionParserProvider, ModelError};

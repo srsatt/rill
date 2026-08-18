@@ -1,5 +1,5 @@
 use rill_db::{DbError, DbPool};
-use rill_domain::NormalizedDocument;
+use rill_domain::{ExternalLink, LinkRelation, NormalizedDocument};
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -109,6 +109,21 @@ impl DedupService {
                     document.canonical_url.as_deref().unwrap_or(url)],
             )?;
         }
+        for link in normalize_links(document.links.iter(), canonical_url.as_deref()) {
+            transaction.execute(
+                "INSERT INTO document_links(document_id, normalized_url, original_url, relation,
+                 title, ordinal) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(document_id, normalized_url) DO NOTHING",
+                params![
+                    document_id,
+                    link.normalized_url,
+                    link.original_url,
+                    link.relation.as_str(),
+                    link.title,
+                    link.ordinal
+                ],
+            )?;
+        }
         transaction.execute(
             "INSERT INTO document_curators(document_id, curator_kind, curator_id, source_instance_id,\n\
              raw_item_id, collection_entry_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)\n\
@@ -146,6 +161,57 @@ impl DedupService {
             created,
         })
     }
+}
+
+struct NormalizedLink {
+    normalized_url: String,
+    original_url: String,
+    relation: LinkRelation,
+    title: Option<String>,
+    ordinal: u32,
+}
+
+fn normalize_links<'a>(
+    links: impl Iterator<Item = &'a ExternalLink>,
+    canonical_url: Option<&str>,
+) -> Vec<NormalizedLink> {
+    let mut candidates = canonical_url
+        .map(|url| ExternalLink {
+            url: url.to_owned(),
+            relation: LinkRelation::alternate(),
+            title: None,
+            ordinal: 0,
+        })
+        .into_iter()
+        .chain(links.cloned())
+        .collect::<Vec<_>>();
+    candidates.sort_by_key(|link| link.ordinal);
+    let mut output = Vec::new();
+    for link in candidates {
+        if output.len() >= 16 {
+            break;
+        }
+        if link.url.len() > 2048 {
+            continue;
+        }
+        let Ok(normalized_url) = canonicalize_url(&link.url) else {
+            continue;
+        };
+        if output
+            .iter()
+            .any(|existing: &NormalizedLink| existing.normalized_url == normalized_url)
+        {
+            continue;
+        }
+        output.push(NormalizedLink {
+            normalized_url,
+            original_url: link.url,
+            relation: link.relation,
+            title: link.title.map(|title| title.chars().take(120).collect()),
+            ordinal: u32::try_from(output.len()).unwrap_or(u32::MAX),
+        });
+    }
+    output
 }
 
 pub fn canonicalize_url(value: &str) -> Result<String, DedupError> {
@@ -216,6 +282,7 @@ mod tests {
             author: None,
             publisher: Some("example.com".into()),
             canonical_url: Some(url.into()),
+            links: Vec::new(),
             language: Some("en".into()),
             published_at: None,
         }
@@ -269,6 +336,56 @@ mod tests {
             })
             .unwrap();
         assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn typed_links_are_normalized_deduplicated_and_reloaded() {
+        let pool = DbPool::open_in_memory().unwrap();
+        let service = DedupService::new(pool.clone());
+        let mut input = document("public", "https://example.com/a?utm_source=rss");
+        input.links = vec![
+            ExternalLink {
+                url: "https://example.com/a#top".into(),
+                relation: LinkRelation::alternate(),
+                title: None,
+                ordinal: 0,
+            },
+            ExternalLink {
+                url: "https://forum.example/topic?utm_source=feed".into(),
+                relation: LinkRelation::replies(),
+                title: Some("Thread".into()),
+                ordinal: 1,
+            },
+            ExternalLink {
+                url: "javascript:alert(1)".into(),
+                relation: LinkRelation::new("future-rel").unwrap(),
+                title: None,
+                ordinal: 2,
+            },
+        ];
+        let result = service.upsert_document(&input, &provenance("rss")).unwrap();
+        let links = pool
+            .with_connection(|connection| {
+                let mut statement = connection.prepare(
+                    "SELECT original_url, relation FROM document_links
+                     WHERE document_id=?1 ORDER BY ordinal",
+                )?;
+                let rows = statement.query_map([result.document_id], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })?;
+                rows.collect::<rusqlite::Result<Vec<_>>>()
+            })
+            .unwrap();
+        assert_eq!(
+            links,
+            vec![
+                ("https://example.com/a".into(), "alternate".into()),
+                (
+                    "https://forum.example/topic?utm_source=feed".into(),
+                    "replies".into()
+                ),
+            ]
+        );
     }
 
     #[test]

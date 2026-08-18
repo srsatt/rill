@@ -69,10 +69,6 @@ fn bounded_text(text: &str, maximum_chars: usize) -> String {
     text.chars().take(maximum_chars).collect()
 }
 
-pub(crate) fn hashed_user_key(user_id: &str) -> String {
-    format!("{:x}", Sha256::digest(user_id.as_bytes()))
-}
-
 pub(crate) fn unix_now() -> i64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -80,4 +76,3 @@ pub(crate) fn unix_now() -> i64 {
         .and_then(|duration| i64::try_from(duration.as_secs()).ok())
         .unwrap_or(0)
 }
-

@@ -30,6 +30,7 @@ pub struct StoryVariantView {
     pub sanitized_html: Option<String>,
     pub canonical_url: Option<String>,
     pub original_url: Option<String>,
+    pub links: Vec<StoryLinkView>,
     pub author: Option<String>,
     pub publisher: Option<String>,
     pub language: Option<String>,
@@ -37,6 +38,14 @@ pub struct StoryVariantView {
     pub updated_at: i64,
     pub curators: Vec<CuratorPathView>,
     pub selected: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoryLinkView {
+    pub url: String,
+    pub relation: String,
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -210,6 +219,7 @@ impl IntelligenceService {
                 sanitized_html: row.get(4)?,
                 canonical_url: row.get(5)?,
                 original_url: row.get(6)?,
+                links: Vec::new(),
                 author: row.get(7)?,
                 publisher: row.get(8)?,
                 language: row.get(9)?,
@@ -226,6 +236,7 @@ impl IntelligenceService {
         }
         for variant in &mut variants {
             variant.curators = load_curators(&connection, user_id, &variant.document_id)?;
+            variant.links = load_links(&connection, &variant.document_id)?;
         }
         drop(connection);
 
@@ -364,6 +375,24 @@ fn load_curators(
             curator_commentary: row.get(4)?,
             parent_title: row.get(5)?,
             parent_url: row.get(6)?,
+        })
+    })?;
+    rows.collect()
+}
+
+fn load_links(
+    connection: &rusqlite::Connection,
+    document_id: &str,
+) -> rusqlite::Result<Vec<StoryLinkView>> {
+    let mut statement = connection.prepare(
+        "SELECT normalized_url, relation, title FROM document_links
+         WHERE document_id=?1 ORDER BY ordinal, normalized_url",
+    )?;
+    let rows = statement.query_map([document_id], |row| {
+        Ok(StoryLinkView {
+            url: row.get(0)?,
+            relation: row.get(1)?,
+            title: row.get(2)?,
         })
     })?;
     rows.collect()

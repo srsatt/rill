@@ -1,4 +1,5 @@
 mod clustering;
+mod preference;
 mod stories;
 mod streams;
 
@@ -7,16 +8,17 @@ use std::{sync::Arc, time::SystemTime};
 use rill_db::{DbError, DbPool};
 use rill_jobs::{EnqueueOptions, JobKind, JobQueue, QueueError};
 use rill_model_api::{
-    EmbeddingInput, EmbeddingProvider, ModelError, RecommendationFeedbackEvent,
-    RecommendationProvider, SummaryProvider, SummaryRequest,
+    EmbeddingInput, EmbeddingProvider, ModelError, RecommendationProvider, SummaryProvider,
+    SummaryRequest,
 };
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use thiserror::Error;
+use tracing::warn;
 use uuid::Uuid;
 
-pub use stories::{CuratorPathView, StoryDetailView, StoryVariantView};
+pub use preference::PreferenceRefitPayload;
+pub use stories::{CuratorPathView, StoryDetailView, StoryLinkView, StoryVariantView};
 pub use streams::{CreateStreamInput, RankedStory, StreamFilter, StreamView, UpdateStreamInput};
 
 #[derive(Debug, Error)]
@@ -64,15 +66,6 @@ pub struct DocumentJobPayload {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FeedbackDeliveryPayload {
-    pub event_id: String,
-    pub user_id: String,
-    pub story_id: String,
-    pub feedback: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EvaluateStreamPayload {
     pub user_id: String,
@@ -94,9 +87,10 @@ pub struct IntelligenceService {
     jobs: JobQueue,
     pub(crate) embedding: Arc<dyn EmbeddingProvider>,
     summary: Arc<dyn SummaryProvider>,
-    pub(crate) recommendation: Option<Arc<dyn RecommendationProvider>>,
     pub(crate) cluster_window_seconds: i64,
     pub(crate) cluster_threshold: f32,
+    preference_refit_batch_size: usize,
+    preference_fit_window: usize,
 }
 
 include!("service.rs");

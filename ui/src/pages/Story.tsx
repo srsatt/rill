@@ -1,5 +1,6 @@
-import type { StoryPageModel } from "../../generated/render-contract";
+import type { StoryLinkModel, StoryPageModel } from "../../generated/render-contract";
 import { ModernShell } from "../components/ModernShell";
+import { BookmarkCheckIcon, BookmarkIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, MessageCircleIcon } from "../components/icons";
 import { badge, card, cardContent, cardHeader, table, tableBody, tableCell, tableHead, tableHeader, tableRow } from "../server/solid-ui";
 
 export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
@@ -47,8 +48,10 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
           data-feedback={props.page.explicitFeedback ?? ""}
         />
         <div class="feedback story-controls" aria-label="Story controls" data-enhancement-fallback>
-          <button type="button" onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/read-state`, { read: !props.page.read })}>Mark {props.page.read ? "unread" : "read"}</button>
-          <button type="button" onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/feedback`, { feedback: "favorite" })}>{props.page.favorite ? "Favorited" : "Favorite"}</button>
+          <button type="button" onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/read-state`, { read: !props.page.read })}>{props.page.read ? <EyeOffIcon /> : <EyeIcon />} Mark {props.page.read ? "unread" : "read"}</button>
+          <button type="button" aria-pressed={props.page.explicitFeedback === "like"} onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/feedback`, { feedback: "like" })}>👍 Like</button>
+          <button type="button" aria-pressed={props.page.explicitFeedback === "dislike"} onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/feedback`, { feedback: "dislike" })}>👎 Dislike</button>
+          <button type="button" aria-pressed={props.page.favorite} onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/feedback`, { feedback: "favorite" })}>{props.page.favorite ? <BookmarkCheckIcon /> : <BookmarkIcon />} {props.page.favorite ? "Favorited" : "Favorite"}</button>
         </div>
       </header>
       <article class="story-document">
@@ -64,7 +67,7 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
           </>, "story-title-block")}
           {cardContent(<>
             <div class="article-body">{representative().bodyText}</div>
-            {representative().canonicalUrl ? <p class="original-link"><a href={representative().canonicalUrl ?? undefined} rel="noopener noreferrer">Open original source</a></p> : null}
+            {StoryLinks({ links: representative().links, canonicalUrl: representative().canonicalUrl })}
           </>)}
         </>, "shadow-none")}
       </article>
@@ -99,11 +102,11 @@ function ReaderStory(props: { page: StoryPageModel; csrfToken: string }) {
     <main class="reader story">
       <p><a href="/reader">← Back to feed</a></p>
       <article>
-        <h1>{props.page.representative.title}</h1>
-        <p>{props.page.representative.publisher ?? "Unknown publisher"}{props.page.representative.author ? ` · ${props.page.representative.author}` : ""}</p>
-        <p>{props.page.representative.summary}</p>
+        <h1 class="reader-story-title">{props.page.representative.title}</h1>
+        <p class="reader-story-meta">{props.page.representative.publisher ?? "Unknown publisher"}{props.page.representative.author ? ` · ${props.page.representative.author}` : ""}</p>
+        <p class="reader-story-summary">{props.page.representative.summary}</p>
         <div class="article-body">{props.page.representative.bodyText}</div>
-        {props.page.representative.canonicalUrl ? <p><a href={props.page.representative.canonicalUrl} rel="noopener noreferrer">Open original</a></p> : null}
+        {StoryLinks({ links: props.page.representative.links, canonicalUrl: props.page.representative.canonicalUrl })}
       </article>
       <section aria-labelledby="coverage-heading">
         <h2 id="coverage-heading">Coverage ({props.page.coverageCount})</h2>
@@ -126,15 +129,27 @@ function ReaderStory(props: { page: StoryPageModel; csrfToken: string }) {
         <form method="post" action={`/reader/story/${props.page.storyId}/read`}>
           <input type="hidden" name="csrf_token" value={props.csrfToken} />
           <input type="hidden" name="read" value={props.page.read ? "false" : "true"} />
-          <button type="submit">Mark {props.page.read ? "unread" : "read"}</button>
+          <button type="submit">{props.page.read ? <EyeOffIcon /> : <EyeIcon />} Mark {props.page.read ? "unread" : "read"}</button>
         </form>
         <form method="post" action={`/reader/story/${props.page.storyId}/feedback`}>
           <input type="hidden" name="csrf_token" value={props.csrfToken} />
-          <button name="feedback" value="like">Like</button>
-          <button name="feedback" value="dislike">Dislike</button>
-          <button name="feedback" value="favorite">Favorite</button>
+          <button name="feedback" value="like" aria-pressed={props.page.explicitFeedback === "like"}>👍 Like</button>
+          <button name="feedback" value="dislike" aria-pressed={props.page.explicitFeedback === "dislike"}>👎 Dislike</button>
+          <button name="feedback" value="favorite" aria-pressed={props.page.favorite}>{props.page.favorite ? <BookmarkCheckIcon /> : <BookmarkIcon />} {props.page.favorite ? "Favorited" : "Favorite"}</button>
         </form>
       </section>
     </main>
   );
+}
+
+function StoryLinks(props: { links: StoryLinkModel[]; canonicalUrl: string | null }) {
+  const links = props.links ?? [];
+  const original = links.find((link) => link.relation === "alternate")?.url ?? props.canonicalUrl;
+  const discussion = links.find((link) => link.relation === "replies" && link.url !== original)?.url;
+  if (!original && !discussion) return null;
+  return <p class="original-link">
+    {original ? <a href={original} rel="noopener noreferrer"><ExternalLinkIcon /> Open original</a> : null}
+    {original && discussion ? " · " : null}
+    {discussion ? <a href={discussion} rel="noopener noreferrer"><MessageCircleIcon /> Discussion</a> : null}
+  </p>;
 }

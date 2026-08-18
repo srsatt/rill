@@ -38,6 +38,7 @@ pub struct Settings {
     pub secrets: SecretSettings,
     pub email: EmailSettings,
     pub models: ModelSettings,
+    pub recommendations: RecommendationSettings,
     pub plugins: PluginSettings,
     pub metrics: MetricsSettings,
     pub logging: LoggingSettings,
@@ -244,6 +245,22 @@ pub struct ModelSettings {
     pub summary: Option<HttpModelSettings>,
     pub recommendation: Option<HttpModelSettings>,
     pub collection_parser: Option<HttpModelSettings>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RecommendationSettings {
+    pub refit_batch_size: usize,
+    pub fit_window: usize,
+}
+
+impl Default for RecommendationSettings {
+    fn default() -> Self {
+        Self {
+            refit_batch_size: 5,
+            fit_window: 500,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

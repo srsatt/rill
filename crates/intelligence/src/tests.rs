@@ -10,8 +10,6 @@ mod tests {
 
     struct FailingRecommendation;
 
-    struct SlowRecommendation;
-
     #[async_trait::async_trait]
     impl RecommendationProvider for FailingRecommendation {
         fn identity(&self) -> ModelIdentity {
@@ -41,38 +39,12 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
-    impl RecommendationProvider for SlowRecommendation {
-        fn identity(&self) -> ModelIdentity {
-            ModelIdentity {
-                provider: "test".into(),
-                model: "slow-ranker".into(),
-                version: "1".into(),
-            }
-        }
-
-        async fn rank(&self, _: RankRequest) -> Result<RankResponse, ModelError> {
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-            Err(ModelError::Unavailable("slow fixture".into()))
-        }
-
-        async fn submit_feedback(
-            &self,
-            _: &[RecommendationFeedbackEvent],
-        ) -> Result<(), ModelError> {
-            Ok(())
-        }
-
-        async fn health(&self) -> Result<ModelHealth, ModelError> {
-            Ok(ModelHealth {
-                ready: true,
-                detail: "slow fixture".into(),
-            })
-        }
-    }
-
     fn service() -> (DbPool, IntelligenceService, String, String) {
         let pool = DbPool::open_in_memory().unwrap();
+        service_with_pool(pool)
+    }
+
+    fn service_with_pool(pool: DbPool) -> (DbPool, IntelligenceService, String, String) {
         let connection = pool.connection().unwrap();
         let user_id = Uuid::new_v4().to_string();
         connection
@@ -104,6 +76,17 @@ mod tests {
         (pool, service, user_id, result.document_id)
     }
 
+    fn story_id(pool: &DbPool, document_id: &str) -> String {
+        pool.with_connection(|connection| {
+            connection.query_row(
+                "SELECT story_id FROM story_memberships WHERE document_id=?1",
+                [document_id],
+                |row| row.get(0),
+            )
+        })
+        .unwrap()
+    }
+
     fn rill_domain_fixture() -> rill_domain::NormalizedDocument {
         rill_domain::NormalizedDocument {
             visibility_scope: "public".into(),
@@ -113,6 +96,7 @@ mod tests {
             author: Some("Reporter".into()),
             publisher: Some("example.test".into()),
             canonical_url: Some("https://example.test/article".into()),
+            links: Vec::new(),
             language: Some("en".into()),
             published_at: Some(unix_now()),
         }
@@ -134,6 +118,7 @@ mod tests {
             author: Some("Another reporter".into()),
             publisher: Some(publisher.into()),
             canonical_url: Some(url.into()),
+            links: Vec::new(),
             language: Some("en".into()),
             published_at: Some(unix_now()),
         }
@@ -310,7 +295,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn external_recommendation_failure_keeps_local_feed() {
+    async fn provider_recommendation_override_is_disabled() {
         let (pool, _, user_id, _) = service();
         let intelligence = IntelligenceService::new(
             pool.clone(),
@@ -337,34 +322,124 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn foreground_feed_does_not_wait_for_slow_recommendation_provider() {
-        let (pool, _, user_id, _) = service();
+    async fn preference_model_cold_start_and_one_class_fall_back() {
+        let (pool, intelligence, user_id, document_id) = service();
+        let identity = intelligence.embedding.identity();
+        assert!(intelligence.preference_model(&user_id, &identity).unwrap().is_none());
+        intelligence.process_embedding(&document_id).await.unwrap();
+        let story_id = story_id(&pool, &document_id);
+        for _ in 0..5 {
+            intelligence
+                .record_feedback(&user_id, &story_id, FeedbackKind::Like, "test")
+                .unwrap();
+        }
+        assert!(!intelligence.refit_preference_model(&user_id).unwrap());
+        assert!(intelligence.preference_model(&user_id, &identity).unwrap().is_none());
+    }
+
+    #[test]
+    fn preference_refit_is_queued_at_configured_threshold() {
+        let (pool, intelligence, user_id, document_id) = service();
+        let intelligence = intelligence.configure_preference_model(5, 500);
+        let story_id = story_id(&pool, &document_id);
+        for _ in 0..4 {
+            intelligence
+                .record_feedback(&user_id, &story_id, FeedbackKind::Like, "test")
+                .unwrap();
+        }
+        let queued = || {
+            pool.with_connection(|connection| {
+                connection.query_row(
+                    "SELECT count(*) FROM jobs WHERE kind='RefitPreferenceModel'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+            })
+            .unwrap()
+        };
+        assert_eq!(queued(), 0);
+        intelligence
+            .record_feedback(&user_id, &story_id, FeedbackKind::Dislike, "test")
+            .unwrap();
+        assert_eq!(queued(), 1);
+    }
+
+    #[tokio::test]
+    async fn preference_model_refits_and_survives_restart() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("rill.db");
+        let pool = DbPool::open(&path, 1, std::time::Duration::from_secs(1)).unwrap();
+        let (pool, intelligence, user_id, document_id) = service_with_pool(pool);
+        intelligence.process_embedding(&document_id).await.unwrap();
+        let story_id = story_id(&pool, &document_id);
+        for feedback in [
+            FeedbackKind::Like,
+            FeedbackKind::Like,
+            FeedbackKind::Dislike,
+            FeedbackKind::Like,
+            FeedbackKind::Dislike,
+        ] {
+            intelligence
+                .record_feedback(&user_id, &story_id, feedback, "test")
+                .unwrap();
+        }
+        assert!(intelligence.refit_preference_model(&user_id).unwrap());
+        let feed = intelligence
+            .rank_stream(&user_id, "home", 20, "test")
+            .await
+            .unwrap();
+        assert_eq!(feed[0].explanation["fallback"], false);
+        drop(intelligence);
+        drop(pool);
+
+        let pool = DbPool::open(&path, 1, std::time::Duration::from_secs(1)).unwrap();
         let intelligence = IntelligenceService::new(
             pool.clone(),
             Arc::new(FeatureHashEmbeddingProvider::new(32).unwrap()),
             Arc::new(ExtractiveSummaryProvider),
-            Some(Arc::new(SlowRecommendation)),
+            None,
         );
-
-        let feed = tokio::time::timeout(
-            std::time::Duration::from_millis(50),
-            intelligence.rank_stream(&user_id, "home", 20, "test"),
-        )
-        .await
-        .expect("foreground feed must not await external ranking")
-        .unwrap();
-        assert_eq!(feed.len(), 1);
-        let queued: i64 = pool
+        assert!(
+            intelligence
+                .preference_model(&user_id, &intelligence.embedding.identity())
+                .unwrap()
+                .is_some()
+        );
+        let durable: (i64, i64) = pool
             .with_connection(|connection| {
-                connection.query_row(
-                    "SELECT count(*) FROM jobs WHERE kind='EvaluateStreamCandidates'
-                     AND status='queued'",
-                    [],
-                    |row| row.get(0),
-                )
+                Ok::<_, rusqlite::Error>((
+                    connection.query_row("SELECT count(*) FROM feedback_events", [], |row| {
+                        row.get(0)
+                    })?,
+                    connection.query_row("SELECT count(*) FROM embedding_records", [], |row| {
+                        row.get(0)
+                    })?,
+                ))
             })
             .unwrap();
-        assert_eq!(queued, 1);
+        assert_eq!(durable.0, 5);
+        assert!(durable.1 > 0);
+    }
+
+    #[tokio::test]
+    async fn corrupt_preference_model_falls_back() {
+        let (pool, intelligence, user_id, _) = service();
+        let identity = intelligence.embedding.identity();
+        pool.with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO preference_models(user_id, model_version, feature_version,
+                 embedding_provider, embedding_model, embedding_version, coefficients_json,
+                 sample_count, positive_count, negative_count, trained_event_count)
+                 VALUES (?1, 1, 1, ?2, ?3, ?4, '[]', 2, 1, 1, 2)",
+                params![user_id, identity.provider, identity.model, identity.version],
+            )
+        })
+        .unwrap();
+        let feed = intelligence
+            .rank_stream(&user_id, "home", 20, "test")
+            .await
+            .unwrap();
+        assert_eq!(feed[0].explanation["fallback"], true);
     }
 
     #[tokio::test]

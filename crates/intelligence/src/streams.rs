@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use rill_jobs::{EnqueueOptions, JobKind};
-use rill_model_api::{EmbeddingInput, ModelIdentity, RankCandidate, RankRequest};
+use rill_model_api::{EmbeddingInput, ModelIdentity};
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -9,9 +9,10 @@ use sha2::{Digest, Sha256};
 use tracing::warn;
 use uuid::Uuid;
 
+use crate::preference::PreferenceModel;
 use crate::{
-    EvaluateStreamPayload, IntelligenceError, IntelligenceService, StreamEmbeddingPayload, cosine,
-    decode_vector, encode_vector, hashed_user_key, unix_now,
+    IntelligenceError, IntelligenceService, StreamEmbeddingPayload, cosine, decode_vector,
+    encode_vector, unix_now,
 };
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

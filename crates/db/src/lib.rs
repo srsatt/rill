@@ -46,6 +46,14 @@ const MIGRATIONS: &[(i64, &str)] = &[
         11,
         include_str!("../../../migrations/0011_user_product_state.sql"),
     ),
+    (
+        12,
+        include_str!("../../../migrations/0012_preference_models.sql"),
+    ),
+    (
+        13,
+        include_str!("../../../migrations/0013_document_links.sql"),
+    ),
 ];
 
 #[derive(Debug, Error)]
@@ -243,11 +251,13 @@ mod tests {
             "story_memberships",
             "media",
             "canonical_urls",
+            "document_links",
             "embedding_records",
             "summaries",
             "model_providers",
             "recommendation_runs",
             "recommendation_scores",
+            "preference_models",
             "feedback_events",
             "user_story_state",
             "source_affinity_events",

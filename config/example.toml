@@ -43,6 +43,10 @@ collection_excluded_path_fragments = []
 concurrency = 2
 idle_poll_ms = 500
 
+[recommendations]
+refit_batch_size = 5
+fit_window = 500
+
 [secrets]
 master_key_env = "RILL_MASTER_KEY"
 key_version = 1

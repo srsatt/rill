@@ -104,6 +104,14 @@ pub struct CuratorPathModel {
     pub parent_url: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct StoryLinkModel {
+    pub url: String,
+    pub relation: String,
+    pub title: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct StoryVariantModel {
@@ -112,6 +120,7 @@ pub struct StoryVariantModel {
     pub summary: String,
     pub body_text: String,
     pub canonical_url: Option<String>,
+    pub links: Vec<StoryLinkModel>,
     pub author: Option<String>,
     pub publisher: Option<String>,
     pub language: Option<String>,
@@ -201,6 +210,7 @@ pub fn typescript_bindings() -> String {
         LibraryPageModel::decl(&config),
         SourcesPageModel::decl(&config),
         CuratorPathModel::decl(&config),
+        StoryLinkModel::decl(&config),
         StoryVariantModel::decl(&config),
         StoryPageModel::decl(&config),
         ReaderPreferencesPageModel::decl(&config),

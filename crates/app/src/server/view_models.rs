@@ -105,6 +105,15 @@ fn story_variant_model(variant: StoryVariantView) -> StoryVariantModel {
         summary: variant.summary,
         body_text: variant.body_text,
         canonical_url: variant.canonical_url,
+        links: variant
+            .links
+            .into_iter()
+            .map(|link| rill_contracts::StoryLinkModel {
+                url: link.url,
+                relation: link.relation,
+                title: link.title,
+            })
+            .collect(),
         author: variant.author,
         publisher: variant.publisher,
         language: variant.language,

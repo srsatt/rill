@@ -57,6 +57,7 @@ fn normalize_feed_item(
         author: item.author.clone(),
         publisher,
         canonical_url,
+        links: item.external_urls.clone(),
         language: item
             .metadata
             .get("language")
@@ -86,4 +87,3 @@ fn safe_fts_query(query: &str) -> Result<String, IngestionError> {
 fn truncate(value: &str, maximum: usize) -> String {
     value.chars().take(maximum).collect()
 }
-

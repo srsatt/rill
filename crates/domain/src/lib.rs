@@ -4,6 +4,7 @@ mod source;
 mod user;
 
 pub use source::{
-    CollectionEntryCandidate, ItemShape, NormalizedDocument, RawMedia, RawSourceItem, SourceKind,
+    CollectionEntryCandidate, ExternalLink, ItemShape, LinkRelation, NormalizedDocument, RawMedia,
+    RawSourceItem, SourceKind,
 };
 pub use user::{Role, User};

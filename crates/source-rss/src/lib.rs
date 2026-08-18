@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use async_trait::async_trait;
 use feed_rs::{
@@ -6,7 +6,7 @@ use feed_rs::{
     parser,
 };
 use quick_xml::{Reader, XmlVersion, events::Event};
-use rill_domain::{RawSourceItem, SourceKind};
+use rill_domain::{ExternalLink, LinkRelation, RawSourceItem, SourceKind};
 use rill_source_api::{
     ConditionalHeaders, ConnectorContext, ConnectorError, ConnectorMetadata, SourceBatch,
     SourceConnector, ValidationResult,
@@ -173,12 +173,30 @@ pub fn parse_feed(
     let feed = parser
         .parse(bytes)
         .map_err(|error| ConnectorError::Parse(error.to_string()))?;
-    Ok(feed
+    let comments = rss_comments(bytes, base_url)?;
+    let mut items = feed
         .entries
         .into_iter()
         .take(limit)
         .map(entry_to_item)
-        .collect())
+        .collect::<Vec<_>>();
+    for item in &mut items {
+        let discussion = comments
+            .get(&item.external_id)
+            .or_else(|| item.source_url.as_ref().and_then(|url| comments.get(url)));
+        if let Some(url) = discussion
+            && !item.external_urls.iter().any(|link| link.url == *url)
+            && item.external_urls.len() < 16
+        {
+            item.external_urls.push(ExternalLink {
+                url: url.clone(),
+                relation: LinkRelation::replies(),
+                title: None,
+                ordinal: u32::try_from(item.external_urls.len()).unwrap_or(u32::MAX),
+            });
+        }
+    }
+    Ok(items)
 }
 
 pub fn discover_feed(html: &str, base_url: &Url) -> Option<DiscoveredFeed> {
@@ -267,6 +285,26 @@ fn entry_to_item(entry: Entry) -> RawSourceItem {
         .iter()
         .map(|category| category.term.clone())
         .collect::<Vec<_>>();
+    let external_urls = entry
+        .links
+        .iter()
+        .filter(|link| safe_http_url(&link.href))
+        .take(16)
+        .enumerate()
+        .map(|(ordinal, link)| ExternalLink {
+            url: link.href.clone(),
+            relation: link
+                .rel
+                .as_deref()
+                .and_then(LinkRelation::new)
+                .unwrap_or_else(LinkRelation::alternate),
+            title: link
+                .title
+                .as_deref()
+                .map(|title| title.chars().take(120).collect()),
+            ordinal: u32::try_from(ordinal).unwrap_or(u32::MAX),
+        })
+        .collect();
     RawSourceItem {
         external_id: entry.id,
         item_kind: "article".to_owned(),
@@ -281,9 +319,93 @@ fn entry_to_item(entry: Entry) -> RawSourceItem {
             .map(|date| date.timestamp()),
         edited_at: None,
         deleted_at: None,
-        external_urls: link.into_iter().collect(),
+        external_urls,
         media: Vec::new(),
         metadata: json!({ "categories": categories, "language": entry.language }),
+    }
+}
+
+fn safe_http_url(value: &str) -> bool {
+    Url::parse(value).is_ok_and(|url| {
+        value.len() <= 2048
+            && matches!(url.scheme(), "http" | "https")
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none()
+    })
+}
+
+#[derive(Default)]
+struct SupplementaryItem {
+    guid: String,
+    link: String,
+    comments: String,
+}
+
+fn rss_comments(bytes: &[u8], base_url: &Url) -> Result<HashMap<String, String>, ConnectorError> {
+    let mut reader = Reader::from_reader(bytes);
+    reader.config_mut().trim_text(true);
+    let mut item = None::<SupplementaryItem>;
+    let mut field = None::<Vec<u8>>;
+    let mut output = HashMap::new();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(element)) if element.name().as_ref() == b"item" => {
+                item = Some(SupplementaryItem::default());
+            }
+            Ok(Event::Start(element)) if item.is_some() => {
+                let name = element.name();
+                if matches!(name.as_ref(), b"guid" | b"link" | b"comments") {
+                    field = Some(name.as_ref().to_vec());
+                }
+            }
+            Ok(Event::Text(text)) if field.is_some() => {
+                let value = text
+                    .xml_content(XmlVersion::Implicit1_0)
+                    .map_err(|error| ConnectorError::Parse(error.to_string()))?;
+                assign_rss_field(item.as_mut(), field.as_deref(), &value);
+            }
+            Ok(Event::CData(text)) if field.is_some() => {
+                let value = text
+                    .decode()
+                    .map_err(|error| ConnectorError::Parse(error.to_string()))?;
+                assign_rss_field(item.as_mut(), field.as_deref(), &value);
+            }
+            Ok(Event::End(element)) if element.name().as_ref() == b"item" => {
+                if let Some(item) = item.take()
+                    && let Ok(comments) = base_url.join(item.comments.trim())
+                    && safe_http_url(comments.as_str())
+                {
+                    let comments = comments.to_string();
+                    if !item.guid.trim().is_empty() {
+                        output.insert(item.guid.trim().to_owned(), comments.clone());
+                    }
+                    if let Ok(link) = base_url.join(item.link.trim())
+                        && safe_http_url(link.as_str())
+                    {
+                        output.insert(link.to_string(), comments);
+                    }
+                }
+                field = None;
+            }
+            Ok(Event::End(_)) => field = None,
+            Ok(Event::Eof) => break,
+            Ok(_) => {}
+            Err(error) => return Err(ConnectorError::Parse(error.to_string())),
+        }
+    }
+    Ok(output)
+}
+
+fn assign_rss_field(item: Option<&mut SupplementaryItem>, field: Option<&[u8]>, value: &str) {
+    let Some(item) = item else {
+        return;
+    };
+    match field {
+        Some(b"guid") => item.guid.push_str(value),
+        Some(b"link") => item.link.push_str(value),
+        Some(b"comments") => item.comments.push_str(value),
+        _ => {}
     }
 }
 
@@ -403,13 +525,15 @@ mod tests {
     const RSS: &str = r#"<?xml version="1.0"?><rss version="2.0"><channel>
       <title>Example</title><link>https://example.com</link><description>Test</description>
       <item><guid>story-1</guid><title>One</title><link>https://example.com/one?utm_source=x</link>
+      <comments>https://forum.example/topics/one</comments>
       <description><![CDATA[<p>Useful <b>story</b>.</p>]]></description><pubDate>Sun, 17 Aug 2025 12:00:00 GMT</pubDate></item>
     </channel></rss>"#;
 
     const ATOM: &str = r#"<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
       <id>feed-1</id><title>Example</title><updated>2025-08-17T12:00:00Z</updated>
       <entry><id>atom-1</id><title>Atom one</title><updated>2025-08-17T12:00:00Z</updated>
-      <link href="https://example.com/atom"/><content type="html">&lt;p&gt;Atom body&lt;/p&gt;</content></entry>
+      <link href="https://example.com/atom"/><link rel="replies" href="https://forum.example/atom"/>
+      <content type="html">&lt;p&gt;Atom body&lt;/p&gt;</content></entry>
     </feed>"#;
 
     #[test]
@@ -424,6 +548,29 @@ mod tests {
             atom[0].source_url.as_deref(),
             Some("https://example.com/atom")
         );
+        assert_eq!(rss[0].external_urls[1].relation.as_str(), "replies");
+        assert_eq!(
+            rss[0].external_urls[1].url,
+            "https://forum.example/topics/one"
+        );
+        assert!(atom[0].external_urls.iter().any(|link| {
+            link.relation.as_str() == "replies" && link.url == "https://forum.example/atom"
+        }));
+    }
+
+    #[test]
+    fn unsafe_rss_comments_url_is_ignored() {
+        let input = r#"<rss version="2.0"><channel><title>X</title><link>https://example.com</link>
+          <description>X</description><item><guid>x</guid><title>X</title>
+          <link>https://example.com/x</link><comments>javascript:alert(1)</comments></item>
+          </channel></rss>"#;
+        let items = parse_feed(
+            input.as_bytes(),
+            &Url::parse("https://example.com/feed").unwrap(),
+            1,
+        )
+        .unwrap();
+        assert_eq!(items[0].external_urls.len(), 1);
     }
 
     #[test]

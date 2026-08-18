@@ -3,17 +3,24 @@ impl IntelligenceService {
         pool: DbPool,
         embedding: Arc<dyn EmbeddingProvider>,
         summary: Arc<dyn SummaryProvider>,
-        recommendation: Option<Arc<dyn RecommendationProvider>>,
+        _recommendation: Option<Arc<dyn RecommendationProvider>>,
     ) -> Self {
         Self {
             jobs: JobQueue::new(pool.clone()),
             pool,
             embedding,
             summary,
-            recommendation,
             cluster_window_seconds: 72 * 60 * 60,
             cluster_threshold: 0.82,
+            preference_refit_batch_size: 5,
+            preference_fit_window: 500,
         }
+    }
+
+    pub fn configure_preference_model(mut self, refit_batch_size: usize, fit_window: usize) -> Self {
+        self.preference_refit_batch_size = refit_batch_size.max(1);
+        self.preference_fit_window = fit_window.max(self.preference_refit_batch_size);
+        self
     }
 
     pub async fn process_summary(&self, document_id: &str) -> Result<(), IntelligenceError> {
@@ -138,6 +145,7 @@ impl IntelligenceService {
         })?;
         clustering::cluster_document(self, &document, &output.vector, &identity)?;
         self.invalidate_recommendations(None)?;
+        self.enqueue_preference_refits_for_document(&document.id);
         Ok(())
     }
 
@@ -198,38 +206,12 @@ impl IntelligenceService {
         transaction.commit()?;
         drop(connection);
 
-        self.jobs.enqueue(
-            JobKind::SubmitRecommendationFeedback,
-            &serde_json::to_value(FeedbackDeliveryPayload {
-                event_id: event_id.clone(),
-                user_id: user_id.to_owned(),
-                story_id: story_id.to_owned(),
-                feedback: feedback.as_str().to_owned(),
-            })?,
-            EnqueueOptions {
-                idempotency_key: Some(format!("SubmitRecommendationFeedback:{event_id}")),
-                ..Default::default()
-            },
-        )?;
+        if matches!(feedback, FeedbackKind::Like | FeedbackKind::Dislike)
+            && let Err(error) = self.enqueue_preference_refit_if_due(user_id)
+        {
+            warn!(error = %error, %user_id, "preference refit could not be queued");
+        }
         Ok(event_id)
-    }
-
-    pub async fn submit_feedback(
-        &self,
-        payload: &FeedbackDeliveryPayload,
-    ) -> Result<(), IntelligenceError> {
-        let Some(provider) = &self.recommendation else {
-            return Ok(());
-        };
-        provider
-            .submit_feedback(&[RecommendationFeedbackEvent {
-                event_id: payload.event_id.clone(),
-                user_key: hashed_user_key(&payload.user_id),
-                story_id: payload.story_id.clone(),
-                feedback: payload.feedback.clone(),
-            }])
-            .await?;
-        Ok(())
     }
 
     pub fn manual_merge(

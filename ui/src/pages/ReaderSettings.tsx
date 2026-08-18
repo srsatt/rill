@@ -17,7 +17,14 @@ export function ReaderSettings(props: { page: ReaderSettingsPageModel; csrfToken
           <label>Name <input name="name" placeholder="Save to my notes" required /></label>
           <label>Destination URL <input name="url" type="url" placeholder="https://example.com/inbox" required /></label>
           <label>Method <select name="method"><option>POST</option><option>PUT</option><option>PATCH</option></select></label>
-          <label>Private headers (JSON) <textarea name="headers" placeholder='{"Authorization":"Bearer …"}' /></label>
+          <details>
+            <summary>Advanced request options</summary>
+            <label>JSON body template <textarea name="body_template" placeholder='{"url":"${story.url}","title":"${story.title}"}' /></label>
+            <label>Header name <input name="header_name" placeholder="Authorization" /></label>
+            <label>Header value environment variable <input name="header_env" placeholder="KARAKEEP_API_TOKEN" /></label>
+            <label>Header prefix <input name="header_prefix" placeholder="Bearer " /></label>
+            <label>Private headers (JSON) <textarea name="headers" placeholder='{"X-Account":"personal"}' /></label>
+          </details>
           <button type="submit" class="primary-action">Add favorite action</button>
         </form>
         <div id="favorite-action-list" class="loading-region" aria-live="polite"><p>Loading your actions…</p></div>

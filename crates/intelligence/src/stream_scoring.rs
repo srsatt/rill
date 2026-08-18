@@ -62,6 +62,7 @@ fn score_candidate(
     positive: Option<&[f32]>,
     negative: Option<&[f32]>,
     stream: Option<&[f32]>,
+    preference: Option<&PreferenceModel>,
 ) -> Result<(), IntelligenceError> {
     let age_hours = candidate.published_at.map_or(72.0, |published| {
         unix_now().saturating_sub(published).max(0) as f32 / 3600.0
@@ -105,6 +106,18 @@ fn score_candidate(
         "streamSimilarity": stream_similarity,
         "fallback": true,
     });
+    if let Some(probability) = preference.and_then(|model| {
+        model.predict(
+            candidate.vector.as_deref()?,
+            candidate.published_at,
+            candidate.coverage,
+            affinity,
+        )
+    }) {
+        candidate.score = candidate.score * 0.75 + probability * 0.25;
+        candidate.explanation["preferenceProbability"] = json!(probability);
+        candidate.explanation["fallback"] = json!(false);
+    }
     Ok(())
 }
 
@@ -166,6 +179,7 @@ fn diversify(
             .max_by(|(_, left), (_, right)| {
                 adjusted_score(left, &publisher_counts)
                     .total_cmp(&adjusted_score(right, &publisher_counts))
+                    .then_with(|| right.story_id.cmp(&left.story_id))
             })
             .expect("non-empty candidates");
         let mut candidate = candidates.swap_remove(index);
@@ -270,4 +284,39 @@ fn comma_list(value: String) -> Vec<String> {
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
         .collect()
+}
+
+#[cfg(test)]
+mod scoring_tests {
+    use super::*;
+
+    #[test]
+    fn equal_scores_use_story_id_tie_break() {
+        let candidate = |story_id: &str| Candidate {
+            story_id: story_id.into(),
+            document_id: story_id.into(),
+            title: story_id.into(),
+            summary: String::new(),
+            canonical_url: None,
+            publisher: None,
+            language: None,
+            published_at: None,
+            coverage: 1,
+            topics: Vec::new(),
+            sources: Vec::new(),
+            curators: Vec::new(),
+            read: false,
+            favorite: false,
+            vector: None,
+            score: 1.0,
+            explanation: serde_json::json!({}),
+        };
+        let ranked = diversify(
+            vec![candidate("story-b"), candidate("story-a")],
+            2,
+            "user",
+            "home",
+        );
+        assert_eq!(ranked[0].story_id, "story-a");
+    }
 }

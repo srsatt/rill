@@ -9,7 +9,7 @@ use rill_source_api::{BoundedHttpClient, FetchError, FetchPolicy, validate_outbo
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, time::Duration};
+use std::{collections::BTreeMap, env, time::Duration};
 use thiserror::Error;
 use url::Url;
 use uuid::Uuid;
@@ -48,6 +48,16 @@ pub struct HttpActionConfig {
     pub maximum_response_bytes: usize,
     #[serde(default = "default_attempts")]
     pub maximum_attempts: u32,
+    #[serde(default)]
+    pub body_template: Option<Value>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct HeaderEnvValue {
+    pub env: String,
+    #[serde(default)]
+    pub prefix: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -58,6 +68,8 @@ pub struct CreateHttpAction {
     pub config: HttpActionConfig,
     #[serde(default)]
     pub headers: BTreeMap<String, String>,
+    #[serde(default)]
+    pub header_env: BTreeMap<String, HeaderEnvValue>,
     #[serde(default = "enabled")]
     pub enabled: bool,
 }
@@ -107,8 +119,13 @@ impl ActionService {
             return Err(ActionError::InvalidConfig("name is required".into()));
         }
         validate_config(&request.config, self.allow_private_networks)?;
-        validate_headers(&request.headers)?;
-        let secret_id = if request.headers.is_empty() {
+        validate_header_env(&request.header_env)?;
+        let mut headers = request.headers.clone();
+        headers.extend(resolve_header_env(&request.header_env, |name| {
+            env::var(name)
+        })?);
+        validate_headers(&headers)?;
+        let secret_id = if headers.is_empty() {
             None
         } else {
             Some(
@@ -118,7 +135,7 @@ impl ActionService {
                     .put(
                         Some(user_id),
                         "http-action-headers",
-                        &serde_json::to_vec(&request.headers)?,
+                        &serde_json::to_vec(&headers)?,
                     )?,
             )
         };
@@ -363,8 +380,9 @@ impl ActionService {
         let config: HttpActionConfig = serde_json::from_str(&raw_config)?;
         validate_config(&config, self.allow_private_networks)?;
         let event = self.event_payload(&user_id, &event_id)?;
+        let body = render_body(&config, &event)?;
         let headers = self.load_headers(secret_id.as_deref())?;
-        send_http(&config, &headers, &key, &event, self.allow_private_networks).await
+        send_http(&config, &headers, &key, &body, self.allow_private_networks).await
     }
 
     fn load_headers(
@@ -387,6 +405,7 @@ impl ActionService {
         type Story = (
             String,
             String,
+            String,
             Option<String>,
             Option<String>,
             Option<i64>,
@@ -396,13 +415,14 @@ impl ActionService {
         let result: Option<Story> = self.pool.with_connection(|connection| {
             connection
                 .query_row(
-                    "SELECT s.id, d.title, d.canonical_url, d.publisher, d.published_at,
-                     (SELECT summary_text FROM document_summaries ds WHERE ds.document_id=d.id
-                      ORDER BY ds.created_at DESC LIMIT 1),
+                    "SELECT s.id, d.id, d.title, d.canonical_url, d.publisher, d.published_at,
+                     (SELECT summary_text FROM summaries su WHERE su.entity_type='document'
+                      AND su.entity_id=d.id AND su.input_checksum=d.exact_content_hash
+                      ORDER BY su.created_at DESC LIMIT 1),
                      (SELECT dc.curator_id FROM document_curators dc WHERE dc.document_id=d.id
                       ORDER BY dc.created_at LIMIT 1)
                      FROM feedback_events fe JOIN stories s ON s.id=fe.story_id
-                     JOIN documents d ON d.id=s.anchor_document_id
+                     JOIN documents d ON d.id=fe.document_id
                      WHERE fe.id=?1 AND fe.user_id=?2 AND fe.feedback='favorite'",
                     params![event_id, user_id],
                     |row| {
@@ -414,18 +434,28 @@ impl ActionService {
                             row.get(4)?,
                             row.get(5)?,
                             row.get(6)?,
+                            row.get(7)?,
                         ))
                     },
                 )
                 .optional()
         })?;
-        let (id, title, url, source, published_at, summary, curator) =
+        let (id, document_id, title, url, source, published_at, summary, curator) =
             result.ok_or(ActionError::NotFound)?;
+        let related_links = self.pool.with_connection(|connection| {
+            let mut statement = connection.prepare(
+                "SELECT normalized_url FROM document_links WHERE document_id=?1
+                 AND relation <> 'alternate' ORDER BY ordinal, normalized_url LIMIT 15",
+            )?;
+            let rows = statement.query_map([document_id], |row| row.get::<_, String>(0))?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+        })?;
         Ok(json!({
             "event": "story.favorite",
             "eventId": event_id,
             "story": { "id": id, "title": title, "summary": summary, "url": url,
-                "source": source, "curator": curator, "publishedAt": published_at }
+                "source": source, "curator": curator, "publishedAt": published_at,
+                "relatedLinks": related_links }
         }))
     }
 }
@@ -434,7 +464,7 @@ async fn send_http(
     config: &HttpActionConfig,
     headers: &BTreeMap<String, String>,
     idempotency_key: &str,
-    event: &Value,
+    body: &Value,
     allow_private_networks: bool,
 ) -> Result<String, ActionError> {
     let url =
@@ -464,7 +494,7 @@ async fn send_http(
     })
     .map_err(|error| ActionError::Http(error.to_string()))?;
     client
-        .send_json(method, &url, request_headers, serde_json::to_vec(event)?)
+        .send_json(method, &url, request_headers, serde_json::to_vec(body)?)
         .await
         .map_err(|error| ActionError::Http(error.to_string()))?;
     Ok("2xx".into())

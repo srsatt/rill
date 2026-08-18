@@ -1,7 +1,7 @@
 use ammonia::Builder as Sanitizer;
 use chrono::DateTime;
 use rill_dedup::{canonicalize_url, content_checksum};
-use rill_domain::NormalizedDocument;
+use rill_domain::{ExternalLink, LinkRelation, NormalizedDocument};
 use rill_source_api::{BoundedHttpClient, ConditionalHeaders, FetchError};
 use scraper::{ElementRef, Html, Selector};
 use thiserror::Error;
@@ -137,6 +137,12 @@ fn extract_telegram_post(
             author: Some(format!("@{channel}")),
             publisher: Some(format!("t.me/{channel}")),
             canonical_url: Some(canonical_url.to_string()),
+            links: vec![ExternalLink {
+                url: canonical_url.to_string(),
+                relation: LinkRelation::alternate(),
+                title: None,
+                ordinal: 0,
+            }],
             language: None,
             published_at,
         },
@@ -230,7 +236,13 @@ pub fn extract_html(
             sanitized_html: Some(sanitized_html),
             author,
             publisher,
-            canonical_url: Some(canonical_url),
+            canonical_url: Some(canonical_url.clone()),
+            links: vec![ExternalLink {
+                url: canonical_url.clone(),
+                relation: LinkRelation::alternate(),
+                title: None,
+                ordinal: 0,
+            }],
             language,
             published_at,
         },
