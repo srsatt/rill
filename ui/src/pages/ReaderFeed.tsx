@@ -1,4 +1,5 @@
 import type { FeedPageModel } from "../../generated/render-contract";
+import { BookmarkIcon } from "../components/icons";
 
 export function ReaderFeed(props: { page: FeedPageModel; csrfToken: string }) {
   return (
@@ -14,15 +15,15 @@ export function ReaderFeed(props: { page: FeedPageModel; csrfToken: string }) {
       {props.page.stories.map((story) => {
         const tags = story.tags || [];
         return <article>
-          <h2><a href={`/reader/story/${story.id}`}>{story.title}</a></h2>
-          <p>{story.summary}</p>
+          <h2 class="reader-story-title"><a href={`/reader/story/${story.id}`}>{story.title}</a></h2>
+          <p class="reader-story-summary">{story.summary}</p>
           {tags.length > 0 ? <p>Topics: {tags.join(", ")}</p> : null}
-          <p>{story.source} · {story.readingMinutes} min</p>
+          <p class="reader-story-meta">{story.source} · {story.readingMinutes} min</p>
           <form method="post" action={`/reader/story/${story.id}/feedback`}>
             <input type="hidden" name="csrf_token" value={props.csrfToken} />
-            <button name="feedback" value="like">Like</button>
-            <button name="feedback" value="dislike">Dislike</button>
-            <button name="feedback" value="favorite">Favorite</button>
+            <button name="feedback" value="like" aria-pressed="false">👍 Like</button>
+            <button name="feedback" value="dislike" aria-pressed="false">👎 Dislike</button>
+            <button name="feedback" value="favorite" aria-pressed="false"><BookmarkIcon /> Favorite</button>
           </form>
         </article>;
       })}

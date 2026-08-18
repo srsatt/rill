@@ -2,6 +2,7 @@ import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import type { StreamLink } from "../../generated/render-contract";
 import { primaryLinks } from "../components/ModernShell";
+import { BookmarkCheckIcon, BookmarkIcon, EyeIcon, EyeOffIcon } from "../components/icons";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
@@ -188,9 +189,10 @@ function StoryFeedback(props: { storyId: string }) {
   };
   return (
     <div class="feedback" aria-label="Story feedback">
-      {[["like", "Like"], ["dislike", "Dislike"], ["favorite", "Favorite"]].map(([value, label]) => (
+      {[["like", "👍 Like"], ["dislike", "👎 Dislike"]].map(([value, label]) => (
         <Toggle pressed={selected() === value} onChange={() => void choose(value)} disabled={busy()} variant="outline" size="sm">{label}</Toggle>
       ))}
+      <Toggle pressed={selected() === "favorite"} onChange={() => void choose("favorite")} disabled={busy()} variant="outline" size="sm"><BookmarkIcon /> Favorite</Toggle>
     </div>
   );
 }
@@ -215,10 +217,10 @@ function StoryActions(props: { storyId: string; initialRead: boolean; initialFav
     <div class="story-actions-client">
       {error() && <Alert variant="destructive"><AlertDescription>{error()}</AlertDescription></Alert>}
       <div class="feedback" aria-label="Story controls">
-        <Button type="button" variant="outline" size="sm" onClick={() => void setReadState()}>Mark {read() ? "unread" : "read"}</Button>
-        <Toggle pressed={feedback() === "like"} onChange={() => void setStoryFeedback("like")} variant="outline" size="sm">Like</Toggle>
-        <Toggle pressed={feedback() === "dislike"} onChange={() => void setStoryFeedback("dislike")} variant="outline" size="sm">Dislike</Toggle>
-        <Toggle pressed={favorite()} onChange={() => void setStoryFeedback("favorite")} variant="outline" size="sm">{favorite() ? "Favorited" : "Favorite"}</Toggle>
+        <Button type="button" variant="outline" size="sm" onClick={() => void setReadState()}>{read() ? <EyeOffIcon /> : <EyeIcon />} Mark {read() ? "unread" : "read"}</Button>
+        <Toggle pressed={feedback() === "like"} onChange={() => void setStoryFeedback("like")} variant="outline" size="sm">👍 Like</Toggle>
+        <Toggle pressed={feedback() === "dislike"} onChange={() => void setStoryFeedback("dislike")} variant="outline" size="sm">👎 Dislike</Toggle>
+        <Toggle pressed={favorite()} onChange={() => void setStoryFeedback("favorite")} variant="outline" size="sm">{favorite() ? <BookmarkCheckIcon /> : <BookmarkIcon />} {favorite() ? "Favorited" : "Favorite"}</Toggle>
       </div>
     </div>
   );

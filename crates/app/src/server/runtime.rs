@@ -71,6 +71,7 @@ fn document_response(
         .iter()
         .map(|path| format!(r#"<link rel="stylesheet" href="/static/{path}">"#))
         .collect::<String>();
+    let styles = format!(r#"<link rel="icon" href="/static/favicon.svg">{styles}"#);
     let client = if hydrate {
         format!(
             r#"<script src="/static/hydration.js"></script><script id="rill-hydration" type="application/json">{hydration}</script><script type="module" src="/static/{}"></script>{}"#,

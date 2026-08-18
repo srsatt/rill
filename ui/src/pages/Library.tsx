@@ -1,5 +1,6 @@
 import type { LibraryPageModel } from "../../generated/render-contract";
 import { ModernShell } from "../components/ModernShell";
+import { SearchIcon } from "../components/icons";
 import { StoryCard } from "../components/StoryCard";
 import { card, cardContent } from "../server/solid-ui";
 
@@ -14,7 +15,7 @@ export function Library(props: { page: LibraryPageModel }) {
       <form method="get" action="/search" role="search" class="search-form">
         <label class="sr-only" for="library-query">Search stories</label>
         <input class="field-input" id="library-query" name="q" type="search" value={props.page.query ?? ""} maxLength="200" placeholder="Search by title, source, or topic" />
-        <button type="submit" class="primary-action">Search</button>
+        <button type="submit" class="primary-action"><SearchIcon /> Search</button>
       </form>
       <nav class="library-tabs" aria-label="Library views">
         <a href="/search" aria-current={props.page.kind === "search" ? "page" : undefined}>Search</a>

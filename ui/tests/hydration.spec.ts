@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+const fixtureUrl = `http://127.0.0.1:${process.env.RILL_E2E_FIXTURE_PORT ?? "3011"}`;
+
 interface ProbeWindow extends Window {
   __rillRootReplaced?: boolean;
 }
@@ -78,10 +80,15 @@ test("modern shell starts with a skip link and named navigation landmarks", asyn
 
 test("reader pairing and feed work with JavaScript disabled", async ({ browser, page }) => {
   await login(page);
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
   await page.goto("/settings/readers");
   await page.getByLabel("Device label").fill("Playwright reader");
   await page.getByRole("button", { name: "Create one-time code" }).click();
   const pairingText = await page.locator(".pairing-code strong").innerText();
+  expect(consoleErrors).toEqual([]);
 
   const context = await browser.newContext({ javaScriptEnabled: false });
   const reader = await context.newPage();
@@ -98,10 +105,21 @@ test("reader pairing and feed work with JavaScript disabled", async ({ browser, 
 
 test("source, story feedback, and stream management use the real API", async ({ page }) => {
   await login(page);
+
+  expect((await page.request.delete(`${fixtureUrl}/action/requests`)).ok()).toBe(true);
+  await page.goto("/settings/readers");
+  const actionForm = page.locator("#favorite-action-create");
+  await actionForm.getByLabel("Name", { exact: true }).fill("Fixture favorite action");
+  await actionForm.getByLabel("Destination URL").fill(`${fixtureUrl}/action`);
+  await actionForm.locator("summary", { hasText: "Advanced request options" }).click();
+  await actionForm.getByLabel("JSON body template").fill('{"url":"${story.url}","title":"${story.title}","eventId":"${eventId}"}');
+  await actionForm.getByRole("button", { name: "Add favorite action" }).click();
+  await expect(page.getByRole("heading", { name: "Fixture favorite action" })).toBeVisible();
+
   await page.goto("/sources");
   const rssForm = page.locator("#rss-create");
   await rssForm.getByLabel("Name").fill("Fixture RSS");
-  await rssForm.getByLabel("Feed URL").fill("http://127.0.0.1:3011/rss.xml");
+  await rssForm.getByLabel("Feed URL").fill(`${fixtureUrl}/rss.xml`);
   await rssForm.getByRole("button", { name: "Add feed" }).click();
   const source = page.locator("article").filter({ has: page.getByRole("heading", { name: "Fixture RSS" }) });
   await expect(source).toBeVisible();
@@ -120,12 +138,28 @@ test("source, story feedback, and stream management use the real API", async ({ 
   expect(cardAfterHover?.x).toBe(cardBeforeHover?.x);
   expect(cardAfterHover?.y).toBe(cardBeforeHover?.y);
   await page.getByRole("link", { name: "Germany changes public software procurement" }).click();
-  for (const feedback of ["Like", "Dislike", "Favorite"]) {
+  await expect(page.getByRole("link", { name: "Open original" })).toHaveAttribute("href", `${fixtureUrl}/article/direct`);
+  await expect(page.getByRole("link", { name: "Discussion" })).toHaveAttribute("href", `${fixtureUrl}/discussion/direct`);
+  for (const feedback of ["👍 Like", "👎 Dislike", "Favorite"]) {
     const response = page.waitForResponse((candidate) =>
       candidate.url().includes("/feedback") && candidate.request().method() === "POST");
     await page.getByRole("button", { name: feedback, exact: true }).click();
     expect((await response).ok()).toBe(true);
   }
+  await expect.poll(async () => {
+    const response = await page.request.get(`${fixtureUrl}/action/requests`);
+    return await response.json();
+  }, { timeout: 20_000 }).toEqual([
+    expect.objectContaining({
+      method: "POST",
+      headers: expect.objectContaining({ "idempotency-key": expect.any(String) }),
+      body: expect.objectContaining({
+        url: `${fixtureUrl}/article/direct`,
+        title: "Germany changes public software procurement",
+        eventId: expect.any(String),
+      }),
+    }),
+  ]);
 
   await page.goto("/sources");
   const streamForm = page.locator("#stream-create");

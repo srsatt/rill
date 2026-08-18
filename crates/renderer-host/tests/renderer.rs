@@ -96,6 +96,7 @@ fn renders_empty_reader_settings_page() -> Result<()> {
     assert_eq!(response.status, 200);
     assert!(response.body_html.contains("No paired readers"));
     assert!(response.body_html.contains("name=\"csrf_token\""));
+    assert_eq!(response.hydration_state, request.props);
     Ok(())
 }
 
@@ -122,6 +123,10 @@ fn story_props(reader: bool) -> Value {
             "summary": "Summary & context",
             "bodyText": "Body with </script><script>alert(1)</script>",
             "canonicalUrl": "https://example.test/story",
+            "links": [
+                { "url": "https://example.test/story", "relation": "alternate", "title": null },
+                { "url": "https://forum.example/story", "relation": "replies", "title": "Thread" }
+            ],
             "author": "Alice",
             "publisher": "Example",
             "language": "en",
@@ -155,6 +160,17 @@ fn renders_long_story_body_within_limits() -> Result<()> {
 
     assert_eq!(response.status, 200);
     assert!(response.body_html.contains(&"a".repeat(20_000)));
+    Ok(())
+}
+
+#[test]
+fn renders_original_and_discussion_links() -> Result<()> {
+    let mut request = request("reader-story", RenderMode::Reader);
+    request.props = story_props(true);
+    let response = renderer()?.render(&request)?;
+    assert!(response.body_html.contains("Open original</a>"));
+    assert!(response.body_html.contains("Discussion</a>"));
+    assert!(response.body_html.contains("https://forum.example/story"));
     Ok(())
 }
 

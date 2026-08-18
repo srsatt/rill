@@ -132,7 +132,7 @@ function render(request: RenderRequest): RenderResponse {
       status: 200,
       headHtml: `<title>${escapeHtml(page.title)}</title>`,
       bodyHtml: renderToString(() => <ReaderSettings page={page} csrfToken={csrfToken} />, { renderId: request.renderId }),
-      hydrationState: null
+      hydrationState: page
     };
   }
   return errorResponse(404, "Unknown template");

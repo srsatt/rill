@@ -30,7 +30,7 @@ if (window.location.pathname === "/admin") {
     activateEnhancements();
     clientModule.activateSources();
   });
-} else if (window.location.pathname === "/settings/readers") {
+} else if (window.location.pathname.startsWith("/settings/readers")) {
   void Promise.all([import("./pages/ReaderSettings"), import("./settings-client")]).then(([pageModule, clientModule]) => {
     hydrate(() => <pageModule.ReaderSettings page={page as ReaderSettingsPageModel} csrfToken={csrfToken()} />, root, { renderId });
     activateEnhancements();
