@@ -1,0 +1,19 @@
+[package]
+name = "rill-collection-expansion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+regex.workspace = true
+rill-dedup = { path = "../dedup" }
+rill-domain = { path = "../domain" }
+rill-model-api = { path = "../model-api" }
+scraper.workspace = true
+serde.workspace = true
+sha2.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

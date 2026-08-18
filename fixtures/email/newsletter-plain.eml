@@ -1,0 +1,20 @@
+From: Plain Dispatch <plain@example.test>
+To: reader@example.test
+Subject: Plain newsletter fixture
+Date: Mon, 17 Aug 2026 11:00:00 +0000
+Message-ID: <plain-dispatch-1@example.test>
+Content-Type: text/plain; charset=UTF-8
+
+Rust service boundaries
+https://articles.example/rust
+Clear ownership makes small services easier to operate.
+
+SQLite queue recovery
+https://articles.example/sqlite
+Lease expiry recovers work after a crash.
+
+WASI rendering limits
+https://articles.example/wasm
+Bound fuel, memory, time, and output.
+
+Unsubscribe: https://example.test/unsubscribe

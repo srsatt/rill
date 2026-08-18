@@ -1,0 +1,128 @@
+:root {
+  color: #172033;
+  background: #f4f6fb;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.auth-shell {
+  max-width: 30rem;
+  margin: 8vh auto;
+}
+
+.auth-shell form,
+.auth-shell label {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.auth-shell form { gap: 1rem; }
+
+.pairing-code {
+  border: 2px solid currentColor;
+  font-size: 1.35rem;
+  letter-spacing: 0.12em;
+  padding: 1rem;
+}
+
+main {
+  box-sizing: border-box;
+  width: min(54rem, calc(100% - 2rem));
+  margin: 4rem auto;
+}
+
+nav {
+  display: flex;
+  gap: 1rem;
+  margin-block: 1rem 2rem;
+}
+
+.story-card {
+  padding: 1.5rem;
+  border: 1px solid #dce1ec;
+  border-radius: 1rem;
+  background: white;
+  box-shadow: 0 1rem 3rem rgb(23 32 51 / 8%);
+}
+
+.meta {
+  color: #5b6477;
+}
+
+.feedback {
+  display: flex;
+  gap: 0.75rem;
+}
+
+button {
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid #b7bfd0;
+  border-radius: 0.5rem;
+  background: white;
+  font: inherit;
+  cursor: pointer;
+}
+
+button[aria-pressed="true"] {
+  color: white;
+  background: #3457d5;
+}
+
+.admin-section {
+  margin-block: 3rem;
+}
+
+.admin-card {
+  margin-block: 1rem;
+  padding: 1.25rem;
+  border: 1px solid #dce1ec;
+  border-radius: 0.75rem;
+  background: white;
+}
+
+.admin-card button + button {
+  margin-inline-start: 0.5rem;
+}
+
+.admin-form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 42rem;
+}
+
+.admin-form label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.admin-form input,
+.admin-form select,
+.admin-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.6rem;
+  font: inherit;
+}
+
+.admin-form.compact {
+  margin-block-start: 1rem;
+  padding-block-start: 1rem;
+  border-top: 1px solid #dce1ec;
+}
+
+dt {
+  font-weight: 700;
+}
+
+dd {
+  margin: 0 0 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: #9b1c1c;
+}

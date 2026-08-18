@@ -1,0 +1,51 @@
+[
+  {
+    "externalId": "telegram:examplechannel:103",
+    "itemKind": "message",
+    "title": null,
+    "bodyText": "A small gallery",
+    "bodyHtml": "A small gallery",
+    "author": "@examplechannel",
+    "sourceUrl": "https://t.me/examplechannel/103",
+    "publishedAt": 1786968000,
+    "editedAt": null,
+    "deletedAt": null,
+    "externalUrls": [],
+    "media": [
+      {
+        "kind": "image",
+        "url": "https://cdn.example.test/photo-1.jpg",
+        "mimeType": null,
+        "sizeBytes": null,
+        "width": null,
+        "height": null,
+        "groupId": "examplechannel:103"
+      },
+      {
+        "kind": "image",
+        "url": "https://cdn.example.test/photo-2.jpg",
+        "mimeType": null,
+        "sizeBytes": null,
+        "width": null,
+        "height": null,
+        "groupId": "examplechannel:103"
+      },
+      {
+        "kind": "video",
+        "url": "https://cdn.example.test/clip.mp4",
+        "mimeType": null,
+        "sizeBytes": null,
+        "width": null,
+        "height": null,
+        "groupId": "examplechannel:103"
+      }
+    ],
+    "metadata": {
+      "telegram": {
+        "channel": "examplechannel",
+        "messageId": 103,
+        "forwardedFrom": null
+      }
+    }
+  }
+]

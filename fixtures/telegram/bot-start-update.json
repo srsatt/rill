@@ -1,0 +1,7 @@
+{
+  "message_id": 10,
+  "date": 1786960800,
+  "chat": { "id": 12345, "type": "private", "first_name": "Reader" },
+  "from": { "id": 12345, "is_bot": false, "first_name": "Reader" },
+  "text": "/start one-time-token"
+}

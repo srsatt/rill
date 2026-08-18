@@ -1,0 +1,84 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/actions",
+    "crates/app",
+    "crates/auth",
+    "crates/collection-expansion",
+    "crates/config",
+    "crates/contracts",
+    "crates/db",
+    "crates/dedup",
+    "crates/domain",
+    "crates/extraction",
+    "crates/ingestion",
+    "crates/intelligence",
+    "crates/jobs",
+    "crates/model-api",
+    "crates/plugin-host",
+    "crates/renderer-host",
+    "crates/secrets",
+    "crates/source-api",
+    "crates/source-email",
+    "crates/source-rss",
+    "crates/source-telegram",
+    "crates/telegram-bot",
+    "sdk/source-plugin",
+    "tools/xtask",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+rust-version = "1.96"
+
+[workspace.dependencies]
+anyhow = "1.0.100"
+ammonia = "4.1.4"
+argon2 = "0.5.3"
+async-trait = "0.1.92"
+axum = "0.8.9"
+base64 = "0.22.1"
+chacha20poly1305 = "0.10.1"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "serde"] }
+clap = { version = "4.6.6", features = ["derive"] }
+feed-rs = "2.4.0"
+futures-util = "0.3.34"
+getrandom = "0.4.3"
+teloxide = { version = "0.17.0", default-features = false, features = ["rustls"] }
+async-imap = { version = "0.11.3", default-features = false, features = ["runtime-tokio"] }
+mail-parser = { version = "0.11.6", features = ["full_encoding"] }
+quick-xml = { version = "0.41.0", features = ["serialize"] }
+regex = "1.12.4"
+reqwest = { version = "0.13.4", default-features = false, features = ["brotli", "deflate", "gzip", "rustls", "stream"] }
+rusqlite = { version = "0.40.1", default-features = false, features = ["backup", "bundled"] }
+scraper = "0.27.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+sha2 = "0.10.9"
+subtle = "2.6.1"
+tempfile = "3.27.0"
+thiserror = "2.0.18"
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
+tokio-rustls = "0.26.4"
+tower-http = { version = "0.7.0", features = ["compression-br", "compression-gzip", "fs"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+toml = "1.1.4"
+ts-rs = "12.0.1"
+url = "2.5.8"
+uuid = { version = "1.18.1", features = ["v4"] }
+wasm-encoder = "0.252.0"
+wasmparser = "0.252.0"
+wasmtime = "47.0.3"
+wasmtime-wasi = "47.0.3"
+wat = "1.256.0"
+webpki-roots = "1.0.5"
+zeroize = "1.9.0"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = true

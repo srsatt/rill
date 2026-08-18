@@ -1,0 +1,18 @@
+[package]
+name = "rill-renderer-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rill-contracts = { path = "../contracts" }
+serde_json.workspace = true
+thiserror.workspace = true
+wasmtime.workspace = true
+wasmtime-wasi.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+tempfile.workspace = true
+wat.workspace = true

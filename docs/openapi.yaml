@@ -1,0 +1,439 @@
+openapi: 3.1.0
+info:
+  title: Rill API
+  version: 0.1.0
+  description: Browser-oriented JSON API. Unsafe authenticated operations also require an exact same-origin request and X-CSRF-Token.
+servers:
+  - url: /api/v1
+components:
+  securitySchemes:
+    browserSession:
+      type: apiKey
+      in: cookie
+      name: __Host-rill_session
+    csrf:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    Enabled:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+    Feedback:
+      type: object
+      required: [feedback]
+      properties:
+        feedback:
+          type: string
+          enum: [like, dislike, favorite, none]
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing or invalid session
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Role, origin, or CSRF check failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+security:
+  - browserSession: []
+paths:
+  /auth/login:
+    post:
+      security: []
+      summary: Create a browser session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login, password]
+              properties:
+                login: { type: string }
+                password: { type: string, format: password, writeOnly: true }
+      responses:
+        '200': { description: Session and CSRF token; session is also set as HttpOnly cookie }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/logout:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Revoke the current browser session
+      responses:
+        '204': { description: Revoked }
+  /auth/me:
+    get:
+      summary: Return current user
+      responses:
+        '200': { description: Current user }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /feed:
+    get:
+      summary: Return the authenticated user's feed
+      responses:
+        '200': { description: Ranked stories }
+  /search:
+    get:
+      summary: Search visible documents
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200': { description: Search hits }
+  /sources:
+    get:
+      summary: List visible source instances and health
+      responses:
+        '200': { description: Sources }
+  /sources/rss:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Create an RSS or Atom source
+      responses:
+        '201': { description: Source registered }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /sources/email:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Create an IMAP newsletter source with encrypted password
+      responses:
+        '201': { description: Source registered }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /sources/telegram:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Subscribe to a public Telegram channel by username
+      responses:
+        '201': { description: Shared channel source and subscription created }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /sources/{sourceId}/poll:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Enqueue an immediate source poll
+      parameters:
+        - { name: sourceId, in: path, required: true, schema: { type: string } }
+      responses:
+        '202': { description: Poll queued }
+  /telegram/binding:
+    get:
+      summary: Return current Telegram bot binding status
+      responses:
+        '200': { description: Binding status }
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Create a single-use Telegram bot binding deep link
+      responses:
+        '201': { description: Binding challenge }
+    delete:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Unbind Telegram identity without changing subscriptions
+      responses:
+        '204': { description: Unbound }
+  /streams:
+    get:
+      summary: List streams
+      responses:
+        '200': { description: Streams }
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Create a deterministic and optionally semantic stream
+      responses:
+        '201': { description: Stream }
+  /streams/{slug}/feed:
+    get:
+      summary: Rank one stream
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Ranked stories }
+  /stories/{storyId}/feedback:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Replace explicit feedback or set Favorite
+      parameters:
+        - { name: storyId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Feedback' }
+      responses:
+        '200': { description: Feedback event ID }
+  /reader/pairing-codes:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Create a one-time reader pairing code
+      responses:
+        '201': { description: Pairing code and expiration }
+  /reader/devices:
+    get:
+      summary: List paired reader devices
+      responses:
+        '200': { description: Reader devices }
+  /reader/devices/{deviceId}:
+    delete:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Revoke a reader device
+      parameters:
+        - { name: deviceId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Revoked }
+  /actions:
+    get:
+      summary: List HTTP Actions with headers redacted
+      responses:
+        '200': { description: Actions }
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Create a Favorite HTTP Action
+      responses:
+        '201': { description: Action }
+  /actions/{actionId}:
+    delete:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Delete an Action
+      parameters:
+        - { name: actionId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Deleted }
+  /actions/{actionId}/enabled:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Enable or disable an Action
+      parameters:
+        - { name: actionId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Enabled' }
+      responses:
+        '204': { description: Updated }
+  /plugins:
+    get:
+      summary: Admin-only plugin list and health
+      responses:
+        '200': { description: Plugins }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /plugins/install:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Install a WebAssembly Component; disabled by default
+      requestBody:
+        required: true
+        content:
+          application/wasm:
+            schema: { type: string, format: binary }
+      responses:
+        '201': { description: Inspected plugin manifest }
+  /plugins/{pluginId}:
+    get:
+      summary: Inspect plugin manifest, grants, and health
+      parameters:
+        - { name: pluginId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Plugin }
+    delete:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Delete an unused plugin
+      parameters:
+        - { name: pluginId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Deleted }
+  /plugins/{pluginId}/enabled:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Enable or disable plugin after grants
+      parameters:
+        - { name: pluginId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Updated }
+  /plugins/{pluginId}/permissions:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Grant one constrained capability
+      parameters:
+        - { name: pluginId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Granted }
+  /plugins/{pluginId}/sources:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Validate config and create a plugin source instance
+      parameters:
+        - { name: pluginId, in: path, required: true, schema: { type: string } }
+      responses:
+        '201': { description: Source registered }
+  /auth/password:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Change password and revoke every browser session
+      responses:
+        '204': { description: Password changed; authentication cookies cleared }
+  /sources/rss/opml:
+    get:
+      summary: Export owned RSS subscriptions as OPML
+      responses:
+        '200': { description: OPML document }
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Import a bounded OPML document
+      responses:
+        '201': { description: Imported source registrations }
+  /sources/{sourceId}:
+    delete:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Remove a manageable source and its orphaned credential
+      responses:
+        '204': { description: Removed }
+  /sources/{sourceId}/enabled:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Enable or disable a source
+      responses:
+        '204': { description: Updated }
+  /collections/{rawItemId}:
+    get:
+      summary: Inspect collection detection, diagnostics, and children
+      responses:
+        '200': { description: Collection debug record }
+  /collections/{rawItemId}/detect:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Persist a force-collection, force-single, clear, or rerun override
+      responses:
+        '202': { description: Detection queued }
+  /streams/reorder:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Replace stream order with every owned stream exactly once
+      responses:
+        '204': { description: Reordered }
+  /streams/{slug}:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Update a stream while preserving its stable slug
+      responses:
+        '200': { description: Updated stream }
+    delete:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Delete a user stream; Home is protected
+      responses:
+        '204': { description: Deleted }
+  /stories/{storyId}:
+    get:
+      summary: Inspect representative, variants, coverage, and curator paths
+      responses:
+        '200': { description: Story detail }
+  /stories/{storyId}/read-state:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Mark a story read or unread
+      responses:
+        '204': { description: Updated }
+  /stories/{storyId}/representative:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Select one visible document variant for this user
+      responses:
+        '204': { description: Updated }
+  /admin/users:
+    get:
+      summary: Admin-only user and active-session counts
+      responses:
+        '200': { description: Users }
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Create a user
+      responses:
+        '201': { description: User }
+  /admin/users/{userId}/disabled:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Disable or enable a user; disabling revokes sessions
+      responses:
+        '204': { description: Updated }
+  /admin/users/{userId}/role:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Change role and revoke sessions on privilege change
+      responses:
+        '204': { description: Updated }
+  /admin/sessions:
+    get:
+      summary: Admin-only browser sessions
+      responses:
+        '200': { description: Sessions }
+  /admin/sessions/{sessionId}:
+    delete:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Revoke a browser session
+      responses:
+        '204': { description: Revoked }
+  /admin/audit:
+    get:
+      summary: Admin-only audit events
+      responses:
+        '200': { description: Audit events }
+  /admin/jobs:
+    get:
+      summary: Admin-only durable jobs and attempts
+      responses:
+        '200': { description: Jobs }
+  /admin/jobs/{jobId}/retry:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Retry a dead job
+      responses:
+        '204': { description: Queued }
+  /admin/jobs/{jobId}/cancel:
+    post:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Cancel a queued job without mutating leased work
+      responses:
+        '204': { description: Cancelled }
+  /admin/models:
+    get:
+      summary: Redacted model provider configuration overview
+      responses:
+        '200': { description: Provider overview }
+  /admin/settings/models/{slot}:
+    put:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Configure embedding, ranking, or text_parse provider live
+      responses:
+        '200': { description: Redacted provider setting }
+    delete:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Reset a provider slot to its local fallback
+      responses:
+        '204': { description: Reset }
+  /admin/settings/telegram-bot:
+    get:
+      summary: Return redacted Telegram bot status
+      responses:
+        '200': { description: Bot status }
+    put:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Validate, encrypt, and activate a Telegram bot token
+      responses:
+        '200': { description: Bot status }
+    delete:
+      security: [{ browserSession: [], csrf: [] }]
+      summary: Disable the Telegram bot and delete its encrypted token
+      responses:
+        '204': { description: Disabled }

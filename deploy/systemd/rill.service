@@ -1,0 +1,32 @@
+[Unit]
+Description=Rill personal news reader
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rill
+Group=rill
+WorkingDirectory=/var/lib/rill
+EnvironmentFile=/etc/rill/rill.env
+ExecStartPre=/opt/rill/rill --config /etc/rill/config.toml doctor
+ExecStart=/opt/rill/rill --config /etc/rill/config.toml serve
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+ReadWritePaths=/var/lib/rill
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

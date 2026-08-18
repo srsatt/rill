@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Rill fixture feed</title>
+    <link>http://127.0.0.1:3011/</link>
+    <description>Deterministic local integration feed</description>
+    <item>
+      <guid>fixture-direct-1</guid>
+      <title>Germany changes public software procurement</title>
+      <link>http://127.0.0.1:3011/article/direct</link>
+      <pubDate>Mon, 17 Aug 2026 08:00:00 GMT</pubDate>
+      <description><![CDATA[Germany approved a concrete public software procurement change. The first migrations begin in October and require open document formats.]]></description>
+    </item>
+    <item>
+      <guid>fixture-roundup-1</guid>
+      <title>Three practical systems stories</title>
+      <link>http://127.0.0.1:3011/roundup</link>
+      <pubDate>Mon, 17 Aug 2026 09:00:00 GMT</pubDate>
+      <description><![CDATA[
+        <ul>
+          <li><a href="http://127.0.0.1:3011/article/rust">Rust service boundaries</a> — ownership patterns in small services.</li>
+          <li><a href="http://127.0.0.1:3011/article/sqlite">SQLite queue recovery</a> — leases and idempotency.</li>
+          <li><a href="http://127.0.0.1:3011/article/wasm">WASI rendering limits</a> — fuel, memory, and output caps.</li>
+          <li><a href="https://social.example/follow">Follow us</a></li>
+        </ul>
+      ]]></description>
+    </item>
+  </channel>
+</rss>

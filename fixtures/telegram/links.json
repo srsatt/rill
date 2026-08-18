@@ -1,0 +1,23 @@
+[
+  {
+    "externalId": "telegram:examplechannel:102",
+    "itemKind": "message",
+    "title": null,
+    "bodyText": "Read this story and ignore this unsafe link .",
+    "bodyHtml": "\n      Read <a href=\"https://example.com/story?x=1&amp;y=2\" rel=\"noopener noreferrer\">this story</a>\n      and ignore <a rel=\"noopener noreferrer\">this unsafe link</a>.\n      \n    ",
+    "author": "@examplechannel",
+    "sourceUrl": "https://t.me/examplechannel/102",
+    "publishedAt": 1786964400,
+    "editedAt": null,
+    "deletedAt": null,
+    "externalUrls": ["https://example.com/story?x=1&y=2"],
+    "media": [],
+    "metadata": {
+      "telegram": {
+        "channel": "examplechannel",
+        "messageId": 102,
+        "forwardedFrom": null
+      }
+    }
+  }
+]

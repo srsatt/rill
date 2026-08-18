@@ -1,0 +1,17 @@
+[package]
+name = "rill-source-telegram"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ammonia.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+rill-domain = { path = "../domain" }
+rill-source-api = { path = "../source-api" }
+scraper.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true

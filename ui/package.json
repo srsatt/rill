@@ -1,0 +1,40 @@
+{
+  "name": "@rill/ui",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "pnpm build:client && pnpm build:renderer && pnpm coverage:renderer && pnpm compile:renderer",
+    "build:client": "vite build --config vite.client.config.ts",
+    "build:renderer": "vite build --config vite.renderer.config.ts",
+    "coverage:renderer": "scriptc coverage dist/renderer/renderer.js --npm-static auto",
+    "compile:renderer": "mkdir -p ../artifacts && PATH=../tools:$PATH ZIG_GLOBAL_CACHE_DIR=../target/zig-cache ZIG_LOCAL_CACHE_DIR=../target/zig-local-cache SCRIPTC_CC=zigcc SCRIPTC_TARGET=wasm32-wasi scriptc build dist/renderer/renderer.js --npm-static auto --no-keep-c -o ../artifacts/ui-renderer.wasm",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "pnpm build && playwright test"
+  },
+  "dependencies": {
+    "@corvu/resizable": "^0.2.5",
+    "@kobalte/core": "^0.13.13",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "solid-js": "1.9.14",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.10.1",
+    "autoprefixer": "10.4.21",
+    "postcss": "8.5.6",
+    "scriptc": "0.0.32",
+    "tailwindcss": "3.4.17",
+    "typescript": "5.9.3",
+    "vite": "7.2.4",
+    "vite-plugin-solid": "2.11.14"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

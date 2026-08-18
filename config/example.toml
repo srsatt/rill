@@ -1,0 +1,67 @@
+[http]
+bind = "127.0.0.1:3000"
+public_base_url = "https://rill.example.com"
+secure_cookies = true
+
+[database]
+path = "/var/lib/rill/rill.db"
+pool_size = 4
+busy_timeout_ms = 5000
+
+[assets]
+static_dir = "/opt/rill/static"
+renderer_wasm = "/opt/rill/ui-renderer.wasm"
+plugin_dir = "/opt/rill/plugins"
+
+[auth]
+session_days = 30
+reader_session_days = 180
+pairing_minutes = 10
+pairing_max_attempts = 5
+
+[renderer]
+memory_bytes = 67108864
+fuel = 200000000
+timeout_ms = 750
+max_response_bytes = 2097152
+
+[fetch]
+timeout_seconds = 15
+max_redirects = 5
+max_response_bytes = 4194304
+allow_private_networks = false
+
+[ingestion]
+maximum_collection_fan_out = 25
+poll_item_limit = 200
+collection_detection_threshold = 0.65
+collection_parent_display_default = "children_only"
+collection_excluded_hosts = []
+collection_excluded_path_fragments = []
+
+[jobs]
+concurrency = 2
+idle_poll_ms = 500
+
+[secrets]
+master_key_env = "RILL_MASTER_KEY"
+key_version = 1
+
+[email]
+timeout_seconds = 30
+maximum_message_bytes = 8388608
+
+[plugins]
+memory_bytes = 33554432
+fuel = 10000000
+timeout_ms = 2000
+maximum_output_bytes = 4194304
+maximum_component_bytes = 16777216
+maximum_http_bytes = 4194304
+
+[metrics]
+enabled = true
+path = "/metrics"
+
+[logging]
+filter = "rill=info,tower_http=info"

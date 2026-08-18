@@ -1,0 +1,13 @@
+/target/
+**/target/
+/ui/node_modules/
+/ui/dist/
+/ui/playwright-report/
+/ui/test-results/
+/artifacts/
+/.env
+/.DS_Store
+/.scaffold-work/
+*.db
+*.db-shm
+*.db-wal

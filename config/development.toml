@@ -1,0 +1,72 @@
+[http]
+bind = "127.0.0.1:3000"
+public_base_url = "http://127.0.0.1:3000"
+secure_cookies = false
+
+[database]
+path = "var/rill.db"
+pool_size = 2
+
+[renderer]
+memory_bytes = 67108864
+fuel = 200000000
+timeout_ms = 750
+max_response_bytes = 2097152
+
+[fetch]
+allow_private_networks = true
+
+[ingestion]
+maximum_collection_fan_out = 25
+poll_item_limit = 10
+collection_detection_threshold = 0.65
+collection_parent_display_default = "children_only"
+collection_excluded_hosts = []
+collection_excluded_path_fragments = []
+
+[secrets]
+master_key_env = "RILL_MASTER_KEY"
+key_version = 1
+
+[email]
+timeout_seconds = 15
+maximum_message_bytes = 8388608
+
+[models.embedding]
+base_url = "http://127.0.0.1:11434/v1/"
+provider = "ollama"
+model = "embeddinggemma:latest"
+version = "local"
+timeout_seconds = 60
+maximum_batch_items = 64
+retries = 1
+
+[models.summary]
+base_url = "http://127.0.0.1:11434/v1/"
+provider = "ollama"
+model = "gemma4:e4b"
+version = "local"
+timeout_seconds = 120
+maximum_batch_items = 32
+retries = 1
+
+[models.recommendation]
+base_url = "http://127.0.0.1:11434/v1/"
+provider = "ollama"
+model = "gemma4:e4b"
+version = "local"
+timeout_seconds = 120
+maximum_batch_items = 64
+retries = 1
+
+[plugins]
+memory_bytes = 33554432
+fuel = 10000000
+timeout_ms = 2000
+maximum_output_bytes = 4194304
+maximum_component_bytes = 16777216
+maximum_http_bytes = 4194304
+
+[metrics]
+enabled = true
+path = "/metrics"

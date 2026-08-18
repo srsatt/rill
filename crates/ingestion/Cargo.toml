@@ -1,0 +1,24 @@
+[package]
+name = "rill-ingestion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ammonia.workspace = true
+rill-collection-expansion = { path = "../collection-expansion" }
+rill-db = { path = "../db" }
+rill-dedup = { path = "../dedup" }
+rill-domain = { path = "../domain" }
+rill-extraction = { path = "../extraction" }
+rill-jobs = { path = "../jobs" }
+rill-model-api = { path = "../model-api" }
+rill-source-api = { path = "../source-api" }
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+url.workspace = true
+uuid.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "rill-extraction"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ammonia.workspace = true
+chrono.workspace = true
+rill-dedup = { path = "../dedup" }
+rill-domain = { path = "../domain" }
+rill-source-api = { path = "../source-api" }
+scraper.workspace = true
+thiserror.workspace = true
+url.workspace = true
+

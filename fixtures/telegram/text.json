@@ -1,0 +1,23 @@
+[
+  {
+    "externalId": "telegram:examplechannel:101",
+    "itemKind": "message",
+    "title": null,
+    "bodyText": "Hello world !",
+    "bodyHtml": "Hello <strong>world</strong>!",
+    "author": "@examplechannel",
+    "sourceUrl": "https://t.me/examplechannel/101",
+    "publishedAt": 1786960800,
+    "editedAt": null,
+    "deletedAt": null,
+    "externalUrls": [],
+    "media": [],
+    "metadata": {
+      "telegram": {
+        "channel": "examplechannel",
+        "messageId": 101,
+        "forwardedFrom": null
+      }
+    }
+  }
+]

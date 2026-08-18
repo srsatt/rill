@@ -2,7 +2,7 @@
 
 ## Build a Resource-Efficient, Self-Hosted Personalized News Reader
 
-You are a senior staff software architect and implementation engineer specializing in Rust, WebAssembly, SolidJS, information retrieval, recommender systems, Telegram MTProto, authentication, and resource-efficient self-hosted software.
+You are a senior staff software architect and implementation engineer specializing in Rust, WebAssembly, SolidJS, information retrieval, recommender systems, public-web ingestion, Telegram bots, authentication, and resource-efficient self-hosted software.
 
 Build the complete service described below in the current repository.
 
@@ -25,7 +25,7 @@ Rill is a self-hosted personalized information reader.
 It aggregates content from:
 
 - RSS and Atom feeds
-- Telegram channels through a real MTProto user client
+- Public Telegram channels through their web previews, with an optional binding bot
 - Email newsletters through IMAP
 - Future external source plugins
 
@@ -896,7 +896,6 @@ Required jobs include:
 
 ```text
 PollSource
-ProcessTelegramUpdate
 ParseEmail
 NormalizeRawItem
 
@@ -1006,51 +1005,35 @@ RSS entries themselves may be digest-style items and must be eligible for Collec
 
 Telegram is not an RSS bridge.
 
-Telegram is not scraped.
+Fetch public channel preview HTML through a bounded connector. Parse it into the
+same generic source-item structure as RSS and email. One channel is fetched and
+parsed once; per-user subscriptions control visibility.
 
-Telegram is not implemented only through Bot API.
-
-Use a real Telegram MTProto user client through a maintained Rust library.
-
-Hide the chosen implementation behind:
-
-```rust
-pub trait TelegramGateway
-```
-
-so it can later be replaced.
-
-Support per-user Telegram accounts.
+The Bot API is a control plane, not the content transport. Use teloxide for one
+long-polling bot that binds a Telegram identity to a Rill account and accepts a
+forwarded public-channel message or an explicit `@username` as subscription
+input. Private and protected channels are unsupported.
 
 ---
 
-# 19. Telegram Authentication
+# 19. Telegram Binding
 
 Modern UI flow:
 
 ```text
-phone number
+create one-time deep link
     ↓
-request verification code
+open bot and consume token
     ↓
-enter Telegram code
+bind Telegram identity
     ↓
-optional 2FA password
+forward public-channel post or send @username
     ↓
-encrypted Telegram session
-    ↓
-list dialogs/channels
-    ↓
-select subscriptions
+create/reuse shared source and user subscription
 ```
 
-Never expose Telegram session material after creation.
-
-Never log:
-
-- verification code
-- 2FA password
-- session data
+Store only a hash of the short-lived binding token. Encrypt the admin-managed
+bot token, never return it, and never log either token.
 
 ---
 
@@ -1059,38 +1042,27 @@ Never log:
 Preserve:
 
 ```text
-account ID
-channel ID
 channel username
 message ID
 message text
-Telegram entities
 media metadata
-media group ID
 published time
-edited time
 forward origin
-reply target
-views when available
-forward count when available
-reactions when available
 external URLs
 canonical t.me URL
-deletion state
+parser version
 ```
 
 Support:
 
 - bounded initial backfill
-- continuation cursor
-- live updates
-- reconnect
-- flood-wait handling
-- edits
-- deletes
+- bounded pagination cursor
+- recent edit overlap
 - media-group coalescing
 - idempotent updates
-- per-account health
+- per-channel parser and source health
+
+Do not infer deletion from disappearance on a rolling preview page.
 
 Do not download large media by default.
 
@@ -3347,9 +3319,8 @@ Do not log:
 
 ```text
 passwords
-Telegram codes
-Telegram 2FA passwords
-Telegram sessions
+Telegram bot tokens
+Telegram binding tokens
 cookies
 session tokens
 reader pairing codes
@@ -4003,7 +3974,7 @@ The implementation is complete only when all of the following are true.
 ## Sources
 
 14. RSS ingestion works.
-15. Telegram ingestion works through MTProto as a user client.
+15. Public Telegram ingestion is fetched once per channel and remains visible only to subscribed users; the optional bot binding flow can add subscriptions.
 16. Email newsletter ingestion works through IMAP.
 17. A WASM source plugin runs under capability and resource limits.
 

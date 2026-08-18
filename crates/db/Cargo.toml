@@ -1,0 +1,12 @@
+[package]
+name = "rill-db"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rusqlite.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+

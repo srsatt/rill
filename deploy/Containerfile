@@ -1,0 +1,25 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --home /var/lib/rill --create-home rill
+
+COPY target/release/rill /opt/rill/rill
+COPY artifacts/ui-renderer.wasm /opt/rill/ui-renderer.wasm
+COPY ui/dist/client /opt/rill/static
+COPY config/example.toml /etc/rill/config.toml
+
+RUN chown -R rill:rill /var/lib/rill \
+    && chmod 0755 /opt/rill/rill
+
+USER rill
+WORKDIR /var/lib/rill
+ENV RILL_BIND=0.0.0.0:3000 \
+    RILL_DATABASE_PATH=/var/lib/rill/rill.db \
+    RILL_STATIC_DIR=/opt/rill/static \
+    RILL_RENDERER_WASM=/opt/rill/ui-renderer.wasm
+EXPOSE 3000
+VOLUME ["/var/lib/rill"]
+ENTRYPOINT ["/opt/rill/rill", "--config", "/etc/rill/config.toml"]
+CMD ["serve"]

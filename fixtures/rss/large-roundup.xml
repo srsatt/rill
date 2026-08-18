@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Rill large roundup fixture</title>
+    <link>http://127.0.0.1:3011/</link>
+    <description>Maximum configured collection fan-out fixture</description>
+    <item>
+      <guid>fixture-large-roundup-1</guid>
+      <title>Twenty-five practical implementation notes</title>
+      <pubDate>Mon, 17 Aug 2026 10:00:00 GMT</pubDate>
+      <description><![CDATA[
+        <ul>
+          <li><a href="http://127.0.0.1:3011/article/large-01">Implementation note 01</a> — deterministic detail 01.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-02">Implementation note 02</a> — deterministic detail 02.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-03">Implementation note 03</a> — deterministic detail 03.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-04">Implementation note 04</a> — deterministic detail 04.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-05">Implementation note 05</a> — deterministic detail 05.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-06">Implementation note 06</a> — deterministic detail 06.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-07">Implementation note 07</a> — deterministic detail 07.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-08">Implementation note 08</a> — deterministic detail 08.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-09">Implementation note 09</a> — deterministic detail 09.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-10">Implementation note 10</a> — deterministic detail 10.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-11">Implementation note 11</a> — deterministic detail 11.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-12">Implementation note 12</a> — deterministic detail 12.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-13">Implementation note 13</a> — deterministic detail 13.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-14">Implementation note 14</a> — deterministic detail 14.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-15">Implementation note 15</a> — deterministic detail 15.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-16">Implementation note 16</a> — deterministic detail 16.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-17">Implementation note 17</a> — deterministic detail 17.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-18">Implementation note 18</a> — deterministic detail 18.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-19">Implementation note 19</a> — deterministic detail 19.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-20">Implementation note 20</a> — deterministic detail 20.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-21">Implementation note 21</a> — deterministic detail 21.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-22">Implementation note 22</a> — deterministic detail 22.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-23">Implementation note 23</a> — deterministic detail 23.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-24">Implementation note 24</a> — deterministic detail 24.</li>
+          <li><a href="http://127.0.0.1:3011/article/large-25">Implementation note 25</a> — deterministic detail 25.</li>
+        </ul>
+      ]]></description>
+    </item>
+  </channel>
+</rss>

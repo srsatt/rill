@@ -1,0 +1,7 @@
+{
+  "message_id": 12,
+  "date": 1786968000,
+  "chat": { "id": 12345, "type": "private", "first_name": "Reader" },
+  "from": { "id": 12345, "is_bot": false, "first_name": "Reader" },
+  "text": "Please add https://t.me/PublicChannel"
+}

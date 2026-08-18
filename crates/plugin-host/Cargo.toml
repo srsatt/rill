@@ -1,0 +1,23 @@
+[package]
+name = "rill-plugin-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+base64.workspace = true
+rill-db = { path = "../db" }
+rill-domain = { path = "../domain" }
+rill-secrets = { path = "../secrets" }
+rill-source-api = { path = "../source-api" }
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+uuid.workspace = true
+wasmtime.workspace = true

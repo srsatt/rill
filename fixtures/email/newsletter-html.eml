@@ -1,0 +1,14 @@
+From: Systems Weekly <editor@example.test>
+To: reader@example.test
+Subject: Systems Weekly fixture
+Date: Mon, 17 Aug 2026 10:00:00 +0000
+Message-ID: <systems-weekly-1@example.test>
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+
+<html><body>
+<article><h2><a href="https://articles.example/rust">Rust service boundaries</a></h2><p>Clear ownership makes small services easier to operate.</p></article>
+<article><h2><a href="https://articles.example/sqlite">SQLite queue recovery</a></h2><p>Lease expiry recovers work after a crash.</p></article>
+<article><h2><a href="https://articles.example/wasm">WASI rendering limits</a></h2><p>Bound fuel, memory, time, and output.</p></article>
+<footer><a href="https://example.test/unsubscribe">Unsubscribe</a> · <a href="https://social.example/follow">Follow us</a></footer>
+</body></html>

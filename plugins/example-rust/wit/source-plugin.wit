@@ -1,0 +1,19 @@
+package rill:source-plugin@1.0.0;
+
+interface host {
+    log: func(level: string, message: string);
+    get-secret: func(name: string) -> result<string, string>;
+    http-get: func(url: string, maximum-bytes: u32) -> result<string, string>;
+}
+
+interface source {
+    metadata: func() -> string;
+    config-schema: func() -> string;
+    validate-config: func(config-json: string) -> result<string, string>;
+    poll: func(config-json: string, cursor-json: option<string>, limit: u32) -> result<string, string>;
+}
+
+world plugin {
+    import host;
+    export source;
+}

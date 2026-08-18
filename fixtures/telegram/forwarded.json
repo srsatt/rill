@@ -1,0 +1,23 @@
+[
+  {
+    "externalId": "telegram:examplechannel:104",
+    "itemKind": "message",
+    "title": null,
+    "bodyText": "Forwarded post body",
+    "bodyHtml": "Forwarded post body",
+    "author": "@examplechannel",
+    "sourceUrl": "https://t.me/examplechannel/104",
+    "publishedAt": 1786971600,
+    "editedAt": null,
+    "deletedAt": null,
+    "externalUrls": [],
+    "media": [],
+    "metadata": {
+      "telegram": {
+        "channel": "examplechannel",
+        "messageId": 104,
+        "forwardedFrom": "Forwarded from Original Channel"
+      }
+    }
+  }
+]
