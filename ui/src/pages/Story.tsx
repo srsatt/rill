@@ -1,4 +1,4 @@
-import type { StoryLinkModel, StoryPageModel } from "../../generated/render-contract";
+import type { StoryLinkModel, StoryPageModel, StoryVariantModel } from "../../generated/render-contract";
 import { ModernShell } from "../components/ModernShell";
 import { BookmarkCheckIcon, BookmarkIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, MessageCircleIcon } from "../components/icons";
 import { badge, card, cardContent, cardHeader, table, tableBody, tableCell, tableHead, tableHeader, tableRow } from "../server/solid-ui";
@@ -20,9 +20,10 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
     if (response.ok) window.location.reload();
   };
   const representative = () => props.page.representative;
+  const hasAlternatives = () => props.page.coverageCount > 1;
   return ModernShell({
       activeHref: "/stream/home",
-      detail: (
+      detail: hasAlternatives() ? (
         <section aria-labelledby="provenance-heading">
           <p class="eyebrow">Provenance</p>
           <h2 id="provenance-heading" class="detail-heading">Coverage map</h2>
@@ -36,7 +37,7 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
             </>)}
           </>)}
         </section>
-      ),
+      ) : undefined,
       children: <>
       <header class="story-page-header">
         <a href="/stream/home">← Back to feed</a>
@@ -60,10 +61,10 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
             <div class="story-source-line">
               {badge(representative().publisher ?? "Unknown publisher", "outline")}
               {representative().author ? <span>By {representative().author}</span> : null}
-              <span>{props.page.coverageCount} sources</span>
+              <span>{props.page.coverageCount} {props.page.coverageCount === 1 ? "source" : "sources"}</span>
             </div>
             <h1>{representative().title}</h1>
-            <p class="story-deck">{representative().summary}</p>
+            {hasDistinctSummary(representative()) ? <p class="story-deck">{representative().summary}</p> : null}
           </>, "story-title-block")}
           {cardContent(<>
             <div class="article-body">{representative().bodyText}</div>
@@ -72,8 +73,8 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
         </>, "shadow-none")}
       </article>
 
-      <section class="coverage-section" aria-labelledby="coverage-heading">
-        <div class="section-heading"><div><p class="eyebrow">Sources</p><h2 id="coverage-heading">Coverage ({props.page.coverageCount})</h2></div></div>
+      {hasAlternatives() ? <section class="coverage-section" aria-labelledby="coverage-heading">
+        <div class="section-heading"><h2 id="coverage-heading">Coverage ({props.page.coverageCount})</h2></div>
         <div class="coverage-list">
           {props.page.variants.map((variant) => (
             <div class={variant.selected ? "coverage-variant-frame selected" : "coverage-variant-frame"}>
@@ -92,7 +93,7 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
             </div>
           ))}
         </div>
-      </section>
+      </section> : null}
     </>,
   });
 }
@@ -104,11 +105,11 @@ function ReaderStory(props: { page: StoryPageModel; csrfToken: string }) {
       <article>
         <h1 class="reader-story-title">{props.page.representative.title}</h1>
         <p class="reader-story-meta">{props.page.representative.publisher ?? "Unknown publisher"}{props.page.representative.author ? ` · ${props.page.representative.author}` : ""}</p>
-        <p class="reader-story-summary">{props.page.representative.summary}</p>
+        {hasDistinctSummary(props.page.representative) ? <p class="reader-story-summary">{props.page.representative.summary}</p> : null}
         <div class="article-body">{props.page.representative.bodyText}</div>
         {StoryLinks({ links: props.page.representative.links, canonicalUrl: props.page.representative.canonicalUrl })}
       </article>
-      <section aria-labelledby="coverage-heading">
+      {props.page.coverageCount > 1 ? <section aria-labelledby="coverage-heading">
         <h2 id="coverage-heading">Coverage ({props.page.coverageCount})</h2>
         {props.page.variants.map((variant) => (
           <article>
@@ -124,7 +125,7 @@ function ReaderStory(props: { page: StoryPageModel; csrfToken: string }) {
             )}
           </article>
         ))}
-      </section>
+      </section> : null}
       <section aria-label="Story controls">
         <form method="post" action={`/reader/story/${props.page.storyId}/read`}>
           <input type="hidden" name="csrf_token" value={props.csrfToken} />
@@ -140,6 +141,11 @@ function ReaderStory(props: { page: StoryPageModel; csrfToken: string }) {
       </section>
     </main>
   );
+}
+
+function hasDistinctSummary(story: StoryVariantModel): boolean {
+  const summary = story.summary.trim();
+  return summary !== "" && summary !== story.bodyText.trim();
 }
 
 function StoryLinks(props: { links: StoryLinkModel[]; canonicalUrl: string | null }) {

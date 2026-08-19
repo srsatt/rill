@@ -1,5 +1,5 @@
 import type { StoryCardModel } from "../../generated/render-contract";
-import { badge, card, cardContent } from "../server/solid-ui";
+import { badge } from "../server/solid-ui";
 import { BookmarkIcon } from "./icons";
 
 export function StoryCard(props: { story: StoryCardModel }) {
@@ -30,7 +30,7 @@ export function StoryCard(props: { story: StoryCardModel }) {
 
   return (
     <article class="story-row" data-story-id={props.story.id} data-published-at={props.story.publishedAt} data-topics={tags.join(",")}>
-      {card(cardContent(<>
+      <div class="story-card-content">
           <div class="story-copy">
             <div class="story-source-line">
               {badge(props.story.source, "outline")}
@@ -50,7 +50,7 @@ export function StoryCard(props: { story: StoryCardModel }) {
             <button type="button" data-feedback="dislike" aria-pressed="false" onClick={selectFeedback}>👎 Dislike</button>
             <button type="button" data-feedback="favorite" aria-pressed="false" onClick={selectFeedback}><BookmarkIcon /> Favorite</button>
           </div>
-        </>, "story-card-content"), "story-card")}
+      </div>
     </article>
   );
 }

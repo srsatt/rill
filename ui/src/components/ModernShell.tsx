@@ -65,7 +65,7 @@ export function ModernShell(props: ModernShellProps) {
           <div data-account-enhancement data-username={username()} />
           <div class="account-fallback" data-enhancement-fallback>
             <span class="account-avatar" aria-hidden="true">{username().slice(0, 1).toUpperCase()}</span>
-            <span><strong>{username()}</strong><small>Signed in</small></span>
+            <span><strong>{username()}</strong><small>Account menu</small></span>
           </div>
         </div>
       </aside>

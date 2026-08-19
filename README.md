@@ -10,6 +10,14 @@ UI and a no-JavaScript reader UI.
 The implementation follows [Rill.md](Rill.md) and began from the reusable
 [rust-solid-scriptc-scaffold](https://github.com/srsatt/rust-solid-scriptc-scaffold).
 
+## Screenshots
+
+![Rill desktop feed in light theme](docs/screenshots/feed-light.png)
+
+<p align="center">
+  <img src="docs/screenshots/feed-mobile-dark.png" width="390" alt="Rill mobile feed in dark theme">
+</p>
+
 ## Runtime shape
 
 ```text

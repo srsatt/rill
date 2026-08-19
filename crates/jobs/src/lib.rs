@@ -276,6 +276,16 @@ impl JobQueue {
         lease_for: Duration,
         at: i64,
     ) -> Result<Option<Job>, QueueError> {
+        self.lease_matching(worker_id, lease_for, at, None)
+    }
+
+    fn lease_matching(
+        &self,
+        worker_id: &str,
+        lease_for: Duration,
+        at: i64,
+        kind: Option<JobKind>,
+    ) -> Result<Option<Job>, QueueError> {
         let lease_seconds = i64::try_from(lease_for.as_secs())
             .unwrap_or(i64::MAX)
             .max(1);
@@ -285,10 +295,11 @@ impl JobQueue {
         let id: Option<String> = transaction
             .query_row(
                 "SELECT id FROM jobs\n\
-             WHERE (status = 'queued' AND available_at <= ?1)\n\
-                OR (status = 'leased' AND lease_expires_at <= ?1)\n\
+             WHERE ((status = 'queued' AND available_at <= ?1)\n\
+                OR (status = 'leased' AND lease_expires_at <= ?1))\n\
+               AND (?2 IS NULL OR kind = ?2)\n\
              ORDER BY priority DESC, available_at, created_at LIMIT 1",
-                [at],
+                params![at, kind.map(JobKind::as_str)],
                 |row| row.get(0),
             )
             .optional()?;
@@ -446,6 +457,7 @@ pub struct Worker<H> {
     handler: Arc<H>,
     worker_id: String,
     concurrency: usize,
+    kind: Option<JobKind>,
     lease_for: Duration,
     retry_delay: Duration,
 }
@@ -457,9 +469,16 @@ impl<H: JobHandler> Worker<H> {
             handler,
             worker_id: Uuid::new_v4().to_string(),
             concurrency: concurrency.max(1),
+            kind: None,
             lease_for: Duration::from_secs(60),
             retry_delay: Duration::from_secs(10),
         }
+    }
+
+    pub fn for_kind(queue: JobQueue, handler: Arc<H>, kind: JobKind) -> Self {
+        let mut worker = Self::new(queue, handler, 1);
+        worker.kind = Some(kind);
+        worker
     }
 
     pub async fn run_once(&self) -> Result<usize, QueueError> {
@@ -468,8 +487,9 @@ impl<H: JobHandler> Worker<H> {
             let queue = self.queue.clone();
             let worker_id = self.worker_id.clone();
             let lease_for = self.lease_for;
+            let kind = self.kind;
             let leased = tokio::task::spawn_blocking(move || {
-                queue.lease(&worker_id, lease_for, unix_now()?)
+                queue.lease_matching(&worker_id, lease_for, unix_now()?, kind)
             })
             .await
             .map_err(|_| QueueError::WorkerTask)??;

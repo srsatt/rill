@@ -68,6 +68,19 @@ function rssBytes(pid) {
   return Number.isFinite(kibibytes) ? kibibytes * 1024 : 0;
 }
 
+function physicalFootprint(pid) {
+  if (process.platform !== "darwin") return null;
+  const result = spawnSync(
+    "footprint",
+    ["-p", String(pid), "-f", "bytes", "--noCategories"],
+    { encoding: "utf8" }
+  );
+  if (result.status !== 0) return null;
+  const current = Number(result.stdout.match(/phys_footprint:\s+(\d+) B/)?.[1]);
+  const peak = Number(result.stdout.match(/phys_footprint_peak:\s+(\d+) B/)?.[1]);
+  return Number.isFinite(current) && Number.isFinite(peak) ? { current, peak } : null;
+}
+
 async function delay(milliseconds) {
   await new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -120,9 +133,11 @@ async function stop(child, signal = "SIGTERM") {
 try {
   const manifest = JSON.parse(readFileSync(join(staticDir, ".vite/manifest.json"), "utf8"));
   const modernPath = join(staticDir, manifest["src/modern-client.tsx"].file);
-  const readerPath = join(staticDir, manifest["src/reader-client.tsx"].file);
   const modern = compressed(modernPath);
-  const reader = compressed(readerPath);
+  const readerEntry = manifest["src/reader-client.tsx"];
+  const reader = readerEntry
+    ? compressed(join(staticDir, readerEntry.file))
+    : { raw: 0, gzip: 0, brotli: 0 };
 
   fixture = spawn("node", ["tools/fixture-server.mjs"], {
     cwd: root,
@@ -141,6 +156,7 @@ try {
   await waitFor(`${serviceOrigin}/health/ready`);
   const coldStartMilliseconds = performance.now() - startedAt;
   const idleRssBytes = await sampleFor(service.pid, 1_000);
+  const footprintSamples = [physicalFootprint(service.pid)].filter(Boolean);
 
   let renderRssBytes = idleRssBytes;
   for (let index = 0; index < 100; index += 1) {
@@ -149,14 +165,17 @@ try {
     await response.arrayBuffer();
     renderRssBytes = Math.max(renderRssBytes, rssBytes(service.pid));
   }
+  footprintSamples.push(physicalFootprint(service.pid));
 
   const ingestionStartRss = rssBytes(service.pid);
   await addAndPoll("Measured RSS", "http://127.0.0.1:3011/rss.xml");
   const ingestionRssBytes = await sampleFor(service.pid, 3_000, ingestionStartRss);
+  footprintSamples.push(physicalFootprint(service.pid));
 
   const collectionStartRss = rssBytes(service.pid);
   await addAndPoll("Measured large roundup", "http://127.0.0.1:3011/large-rss.xml");
   const collectionRssBytes = await sampleFor(service.pid, 5_000, collectionStartRss);
+  footprintSamples.push(physicalFootprint(service.pid));
 
   const search = await runRill(["search", "--user", "admin", "Germany"]);
   if (search === "[]") throw new Error("fixture ingestion produced no searchable story");
@@ -175,6 +194,11 @@ try {
   console.log(`maximum RSS across 100 sequential SSR renders: ${renderRssBytes} bytes`);
   console.log(`maximum service RSS during RSS fixture ingestion: ${ingestionRssBytes} bytes`);
   console.log(`maximum service RSS during 25-link collection expansion: ${collectionRssBytes} bytes`);
+  const footprints = footprintSamples.filter(Boolean);
+  if (footprints.length > 0) {
+    console.log(`maximum sampled physical footprint: ${Math.max(...footprints.map(({ current }) => current))} bytes`);
+    console.log(`peak physical footprint since process start: ${Math.max(...footprints.map(({ peak }) => peak))} bytes`);
+  }
   console.log(`SQLite database after fixture import: ${databaseBytes} bytes`);
 } finally {
   await stop(service).catch(() => {});

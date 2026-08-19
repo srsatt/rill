@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "../components/ui/alert";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 import {
   Select, SelectContent, SelectItem, SelectLabel, SelectTrigger, SelectValue,
@@ -18,7 +18,15 @@ import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from "../components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { TextField, TextFieldInput, TextFieldLabel } from "../components/ui/text-field";
 import { Toggle } from "../components/ui/toggle";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
+import { currentTheme, setTheme, type Theme } from "../theme";
+
+const [theme, setActiveTheme] = createSignal<Theme>(currentTheme());
+
+function chooseTheme(value: string): void {
+  if (value !== "light" && value !== "dark") return;
+  setActiveTheme(value);
+  setTheme(value);
+}
 
 function csrfToken(): string {
   return document.cookie.split(";").map((part) => part.trim().split("="))
@@ -78,6 +86,13 @@ function MobileNavigation(props: { username: string; streams: StreamLink[]; acti
         )}
         <Separator />
         <p class="sheet-account">Signed in as <strong>{props.username}</strong></p>
+        <div class="theme-picker" aria-label="Theme">
+          <span>Theme</span>
+          <div class="theme-picker-controls">
+            <Button type="button" variant={theme() === "light" ? "secondary" : "ghost"} size="sm" aria-pressed={theme() === "light"} onClick={() => chooseTheme("light")}>Light</Button>
+            <Button type="button" variant={theme() === "dark" ? "secondary" : "ghost"} size="sm" aria-pressed={theme() === "dark"} onClick={() => chooseTheme("dark")}>Dark</Button>
+          </div>
+        </div>
       </SheetContent>
     </Sheet>
   );
@@ -87,7 +102,7 @@ function AccountMenu(props: { username: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger as={Button} variant="ghost" class="account-menu-trigger">
-        <Avatar class="size-9"><AvatarFallback>{props.username.slice(0, 1).toUpperCase()}</AvatarFallback></Avatar>
+        <Avatar class="size-9"><AvatarFallback class="account-avatar !bg-primary !text-primary-foreground">{props.username.slice(0, 1).toUpperCase()}</AvatarFallback></Avatar>
         <span><strong>{props.username}</strong><small>Account menu</small></span>
       </DropdownMenuTrigger>
       <DropdownMenuContent class="w-56">
@@ -97,6 +112,12 @@ function AccountMenu(props: { username: string }) {
         <DropdownMenuItem as="a" href="/settings/readers">Settings</DropdownMenuItem>
         <DropdownMenuItem as="a" href="/sources">Sources and streams</DropdownMenuItem>
         <DropdownMenuItem as="a" href="/admin">Administration</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Theme</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={theme()} onChange={chooseTheme}>
+          <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -146,20 +167,22 @@ function FeedToolbar() {
         <TextFieldLabel class="sr-only">Filter stories on this page</TextFieldLabel>
         <TextFieldInput type="search" placeholder="Filter this page" value={query()} onInput={(event) => { setQuery(event.currentTarget.value); updateRows(); }} />
       </TextField>
-      {topics.length > 1 ? <Select<string>
+      <Select<string>
         options={topics}
         value={topic()}
         onChange={(value) => { if (value) setTopic(value); updateRows(); }}
+        class="feed-topic"
         itemComponent={(itemProps) => <SelectItem item={itemProps.item}>{itemProps.item.rawValue}</SelectItem>}
       >
         <SelectLabel class="sr-only">Topic</SelectLabel>
         <SelectTrigger class="feed-sort"><SelectValue<string>>{(state) => state.selectedOption()}</SelectValue></SelectTrigger>
         <SelectContent />
-      </Select> : null}
+      </Select>
       <Select<string>
         options={["Ranked", "Newest"]}
         value={sort()}
         onChange={(value) => { if (value) setSort(value); updateRows(); }}
+        class="feed-order"
         itemComponent={(itemProps) => <SelectItem item={itemProps.item}>{itemProps.item.rawValue}</SelectItem>}
       >
         <SelectLabel class="sr-only">Story order</SelectLabel>
@@ -170,10 +193,6 @@ function FeedToolbar() {
         <SwitchControl><SwitchThumb /></SwitchControl>
         <SwitchLabel>Compact summaries</SwitchLabel>
       </Switch>
-      <Tooltip>
-        <TooltipTrigger as={Button} variant="ghost" size="sm">Ranking help</TooltipTrigger>
-        <TooltipContent>Ranked order follows this stream's instruction and your explicit feedback.</TooltipContent>
-      </Tooltip>
     </div>
   );
 }

@@ -207,7 +207,8 @@ impl IntelligenceService {
         self.ensure_home_stream(user_id)?;
         let stream = self.load_stream(user_id, slug)?;
         let identity = self.embedding.identity();
-        let mut candidates = self.load_candidates(user_id, &identity)?;
+        let affinities = load_affinity_scores(&self.pool, user_id)?;
+        let mut candidates = self.load_candidates(user_id, &identity, &affinities)?;
         candidates.retain(|candidate| matches_filter(candidate, &stream.filter));
         if let Some(cached) =
             self.load_cached_ranking(user_id, &stream.id, limit, ui_mode, &candidates)?
@@ -220,13 +221,12 @@ impl IntelligenceService {
         for candidate in &mut candidates {
             score_candidate(
                 candidate,
-                user_id,
-                &self.pool,
+                &affinities,
                 positive.as_deref(),
                 negative.as_deref(),
                 stream_vector.as_deref(),
                 preference.as_ref(),
-            )?;
+            );
         }
         let selected = diversify(candidates, limit.min(100), user_id, slug);
         self.persist_ranking(RankingPersistence {
@@ -283,35 +283,75 @@ impl IntelligenceService {
         &self,
         user_id: &str,
         identity: &ModelIdentity,
+        affinities: &AffinityScores,
     ) -> Result<Vec<Candidate>, IntelligenceError> {
         let private_scope = format!("user:{user_id}");
         let connection = self.pool.connection()?;
         let mut statement = connection.prepare(
-            "SELECT s.id, d.id, d.title,
+            "WITH candidate_stories AS (
+               SELECT s.id, coalesce(anchor.published_at, anchor.created_at) candidate_order,
+                 uss.selected_document_id, uss.read_at IS NOT NULL is_read,
+                 coalesce(uss.favorite, 0) is_favorite
+               FROM stories s JOIN documents anchor ON anchor.id=s.anchor_document_id
+               LEFT JOIN user_story_state uss ON uss.user_id=?1 AND uss.story_id=s.id
+               WHERE uss.hidden_at IS NULL AND EXISTS (
+                 SELECT 1 FROM story_memberships visible_sm
+                 JOIN documents visible_d ON visible_d.id=visible_sm.document_id
+                 WHERE visible_sm.story_id=s.id AND (visible_d.visibility_scope=?2 OR EXISTS (
+                   SELECT 1 FROM document_access da WHERE da.document_id=visible_d.id
+                     AND (da.user_id IS NULL OR da.user_id=?1)))
+               )
+               ORDER BY candidate_order DESC LIMIT 500
+             ), ranked_topics AS (
+               SELECT story_id, topic, row_number() OVER (
+                 PARTITION BY story_id ORDER BY confidence DESC, topic COLLATE NOCASE
+               ) topic_rank
+               FROM story_topics
+             ), topics AS (
+               SELECT story_id, group_concat(topic, char(31)) topics FROM (
+                 SELECT story_id, topic FROM ranked_topics WHERE topic_rank <= 8
+                 ORDER BY story_id, topic_rank
+               ) GROUP BY story_id
+             ), visible_curators AS (
+               SELECT dc.document_id, dc.source_instance_id, dc.curator_id,
+                 parent.title IS NULL is_direct
+               FROM document_curators dc
+               LEFT JOIN collection_entries ce ON ce.id=dc.collection_entry_id
+               LEFT JOIN raw_items parent ON parent.id=ce.parent_raw_item_id
+               WHERE dc.source_instance_id IS NULL OR EXISTS (
+                 SELECT 1 FROM source_access sa WHERE sa.source_instance_id=dc.source_instance_id
+                   AND (sa.user_id IS NULL OR sa.user_id=?1)
+               )
+             ), curators AS (
+               SELECT document_id, coalesce(group_concat(source_instance_id), '') sources,
+                 coalesce(group_concat(curator_id), '') curator_ids,
+                 coalesce(max(is_direct), 0) is_direct
+               FROM visible_curators GROUP BY document_id
+             )
+             SELECT cs.id, d.id, d.title,
              coalesce((SELECT su.summary_text FROM summaries su WHERE su.entity_type='document'
                AND su.entity_id=d.id AND su.input_checksum=d.exact_content_hash
                ORDER BY su.created_at DESC LIMIT 1), substr(d.body_text, 1, 600)),
              d.canonical_url, d.publisher, d.language, d.published_at,
-             (SELECT count(*) FROM story_memberships scm WHERE scm.story_id=s.id),
-             coalesce((SELECT group_concat(DISTINCT dc.source_instance_id) FROM document_curators dc
-               WHERE dc.document_id=d.id), ''),
-             coalesce((SELECT group_concat(DISTINCT dc.curator_id) FROM document_curators dc
-               WHERE dc.document_id=d.id), ''),
-             uss.read_at IS NOT NULL, coalesce(uss.favorite, 0), er.vector_f32le
-             FROM stories s JOIN documents d ON d.id=s.anchor_document_id
-             LEFT JOIN user_story_state uss ON uss.user_id=?1 AND uss.story_id=s.id
+             coalesce(cs.selected_document_id=d.id, 0), cs.is_read, cs.is_favorite,
+             coalesce(topics.topics, ''), coalesce(curators.sources, ''),
+             coalesce(curators.curator_ids, ''), coalesce(curators.is_direct, 0),
+             d.sanitized_html IS NOT NULL, coalesce(length(d.body_text), 0), er.vector_f32le
+             FROM candidate_stories cs
+             JOIN story_memberships sm ON sm.story_id=cs.id
+             JOIN documents d ON d.id=sm.document_id
+             LEFT JOIN topics ON topics.story_id=cs.id
+             LEFT JOIN curators ON curators.document_id=d.id
              LEFT JOIN embedding_records er ON er.id=(SELECT latest.id FROM embedding_records latest
                WHERE latest.entity_type='document' AND latest.entity_id=d.id
                AND latest.provider=?3 AND latest.model=?4 AND latest.model_version=?5
                ORDER BY latest.created_at DESC LIMIT 1)
-             WHERE uss.hidden_at IS NULL AND EXISTS (
-               SELECT 1 FROM story_memberships visible_sm
-               JOIN documents visible_d ON visible_d.id=visible_sm.document_id
-               WHERE visible_sm.story_id=s.id AND (visible_d.visibility_scope=?2 OR EXISTS (
-                 SELECT 1 FROM document_access da WHERE da.document_id=visible_d.id
-                   AND (da.user_id IS NULL OR da.user_id=?1)))
+             WHERE d.visibility_scope=?2 OR EXISTS (
+               SELECT 1 FROM document_access da WHERE da.document_id=d.id
+                 AND (da.user_id IS NULL OR da.user_id=?1)
              )
-             ORDER BY coalesce(d.published_at, d.created_at) DESC LIMIT 500",
+             ORDER BY cs.candidate_order DESC, cs.id,
+               coalesce(d.published_at, d.created_at), d.id",
         )?;
         let rows = statement.query_map(
             params![
@@ -322,56 +362,48 @@ impl IntelligenceService {
                 identity.version,
             ],
             |row| {
-                let bytes: Option<Vec<u8>> = row.get(13)?;
-                Ok(Candidate {
-                    story_id: row.get(0)?,
-                    document_id: row.get(1)?,
-                    title: row.get(2)?,
-                    summary: row.get(3)?,
-                    canonical_url: row.get(4)?,
-                    publisher: row.get(5)?,
-                    language: row.get(6)?,
-                    published_at: row.get(7)?,
-                    coverage: row.get(8)?,
-                    topics: Vec::new(),
-                    sources: comma_list(row.get(9)?),
-                    curators: comma_list(row.get(10)?),
-                    read: row.get::<_, i64>(11)? != 0,
-                    favorite: row.get::<_, i64>(12)? != 0,
-                    vector: bytes.as_deref().and_then(decode_vector),
-                    score: 0.0,
-                    explanation: json!({}),
+                let bytes: Option<Vec<u8>> = row.get(17)?;
+                Ok(CandidateVariant {
+                    candidate: Candidate {
+                        story_id: row.get(0)?,
+                        document_id: row.get(1)?,
+                        title: row.get(2)?,
+                        summary: row.get(3)?,
+                        canonical_url: row.get(4)?,
+                        publisher: row.get(5)?,
+                        language: row.get(6)?,
+                        published_at: row.get(7)?,
+                        coverage: 0,
+                        topics: control_list(row.get(11)?),
+                        sources: comma_list(row.get(12)?),
+                        curators: comma_list(row.get(13)?),
+                        read: row.get::<_, i64>(9)? != 0,
+                        favorite: row.get::<_, i64>(10)? != 0,
+                        vector: bytes.as_deref().and_then(decode_vector),
+                        score: 0.0,
+                        explanation: json!({}),
+                    },
+                    preferred: row.get::<_, i64>(8)? != 0,
+                    direct: row.get::<_, i64>(14)? != 0,
+                    readable: row.get::<_, i64>(15)? != 0,
+                    body_chars: usize::try_from(row.get::<_, i64>(16)?).unwrap_or(usize::MAX),
                 })
             },
         )?;
-        let mut candidates = rows.collect::<rusqlite::Result<Vec<_>>>()?;
-        drop(statement);
-        drop(connection);
-        for candidate in &mut candidates {
-            let detail = self.story_detail(user_id, &candidate.story_id)?;
-            let representative = detail.representative;
-            candidate.document_id = representative.document_id;
-            candidate.title = representative.title;
-            candidate.summary = representative.summary;
-            candidate.canonical_url = representative.canonical_url;
-            candidate.publisher = representative.publisher;
-            candidate.language = representative.language;
-            candidate.published_at = representative.published_at;
-            candidate.coverage = detail.coverage_count;
-            candidate.topics = self.story_topics(&candidate.story_id)?;
-            candidate.sources = representative
-                .curators
-                .iter()
-                .filter_map(|path| path.source_instance_id.clone())
-                .collect();
-            candidate.curators = representative
-                .curators
-                .iter()
-                .map(|path| path.curator_id.clone())
-                .collect();
-            candidate.vector = self.document_vector(&candidate.document_id, identity)?;
+        let variants = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut grouped = Vec::<Vec<CandidateVariant>>::new();
+        for variant in variants {
+            if grouped.last().is_none_or(|group| {
+                group[0].candidate.story_id != variant.candidate.story_id
+            }) {
+                grouped.push(Vec::new());
+            }
+            grouped.last_mut().expect("group was inserted").push(variant);
         }
-        Ok(candidates)
+        Ok(grouped
+            .into_iter()
+            .map(|variants| candidate_from_variants(variants, affinities))
+            .collect())
     }
 
     pub(crate) fn story_topics(&self, story_id: &str) -> Result<Vec<String>, IntelligenceError> {
@@ -382,30 +414,6 @@ impl IntelligenceService {
         )?;
         let rows = statement.query_map([story_id], |row| row.get(0))?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
-    }
-
-    fn document_vector(
-        &self,
-        document_id: &str,
-        identity: &ModelIdentity,
-    ) -> Result<Option<Vec<f32>>, IntelligenceError> {
-        let bytes: Option<Vec<u8>> = self.pool.with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT vector_f32le FROM embedding_records WHERE entity_type='document'
-                     AND entity_id=?1 AND provider=?2 AND model=?3 AND model_version=?4
-                     ORDER BY created_at DESC LIMIT 1",
-                    params![
-                        document_id,
-                        identity.provider,
-                        identity.model,
-                        identity.version
-                    ],
-                    |row| row.get(0),
-                )
-                .optional()
-        })?;
-        Ok(bytes.as_deref().and_then(decode_vector))
     }
 
     fn preference_centroids(
@@ -453,6 +461,60 @@ impl IntelligenceService {
         Ok((centroid(&positive), centroid(&negative)))
     }
 
+}
+
+fn candidate_from_variants(
+    mut variants: Vec<CandidateVariant>,
+    affinities: &AffinityScores,
+) -> Candidate {
+    let coverage = u32::try_from(variants.len()).unwrap_or(u32::MAX);
+    let selected = variants
+        .iter()
+        .position(|variant| variant.preferred)
+        .unwrap_or_else(|| {
+            let latest = variants
+                .iter()
+                .filter_map(|variant| variant.candidate.published_at)
+                .max()
+                .unwrap_or_else(unix_now);
+            let mut best = (0_usize, f32::NEG_INFINITY);
+            for (index, variant) in variants.iter().enumerate() {
+                let candidate = &variant.candidate;
+                let affinity = affinity_score_from(
+                    affinities,
+                    candidate.publisher.as_deref(),
+                    &candidate.sources,
+                    &candidate.curators,
+                );
+                let completeness = variant.body_chars.min(8_000) as f32 / 8_000.0;
+                let freshness = candidate.published_at.map_or(0.0, |published| {
+                    1.0 - (latest.saturating_sub(published).max(0) as f32
+                        / (30.0 * 86_400.0))
+                        .min(1.0)
+                });
+                let score = affinity * 0.55
+                    + completeness * 0.15
+                    + freshness * 0.10
+                    + if variant.direct { 0.12 } else { 0.0 }
+                    + if variant.readable { 0.10 } else { 0.0 }
+                    + if candidate
+                        .canonical_url
+                        .as_deref()
+                        .is_some_and(|url| url.starts_with("https://"))
+                    {
+                        0.08
+                    } else {
+                        0.0
+                    };
+                if score > best.1 {
+                    best = (index, score);
+                }
+            }
+            best.0
+        });
+    let mut candidate = variants.swap_remove(selected).candidate;
+    candidate.coverage = coverage;
+    candidate
 }
 
 fn into_ranked_stories(candidates: Vec<Candidate>) -> Vec<RankedStory> {

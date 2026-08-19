@@ -44,6 +44,42 @@ mod tests {
     }
 
     #[test]
+    fn leases_only_the_requested_kind() {
+        let queue = queue();
+        for kind in [JobKind::GenerateSummary, JobKind::ExecuteAction] {
+            queue
+                .enqueue(
+                    kind,
+                    &Value::Null,
+                    EnqueueOptions {
+                        available_at: Some(0),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+        }
+
+        let action = queue
+            .lease_matching(
+                "action-worker",
+                Duration::from_secs(30),
+                100,
+                Some(JobKind::ExecuteAction),
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(action.kind, JobKind::ExecuteAction);
+        assert_eq!(
+            queue
+                .lease("general-worker", Duration::from_secs(30), 100)
+                .unwrap()
+                .unwrap()
+                .kind,
+            JobKind::GenerateSummary
+        );
+    }
+
+    #[test]
     fn expired_lease_is_recovered_after_crash() {
         let queue = queue();
         queue

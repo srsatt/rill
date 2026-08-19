@@ -4,14 +4,15 @@
 
 ### TL;DR
 
-Rill now ranks locally with a durable bounded logistic model, preserves typed original/discussion links from RSS and Atom, and can deliver a Favorite through a configurable JSON HTTP action. The complete visual matrix is captured in [visual-audit.md](visual-audit.md); Reader remains JavaScript-free, all touch targets meet the 44px requirement, and the seven-icon static Lucide sprite retains 100% ScriptC coverage. Local verification and the live Karakeep proof are complete.
+Rill now ranks locally with a durable bounded logistic model, preserves typed original/discussion links from RSS and Atom, and can deliver a Favorite through a configurable JSON HTTP action. The final UI has consistent cards and typography, responsive feed controls, tabbed settings, stable account layout, and a persistent light/dark theme picker. Reader remains JavaScript-free, all touch targets meet the 44px requirement, and the seven-icon static Lucide sprite retains 100% ScriptC coverage. Local verification and the live Karakeep proof are complete.
 
 ### Architecture changes
 
 - Raw feedback and embeddings remain authoritative. A coalesced `RefitPreferenceModel` job fits L2-regularized binary logistic regression after five new labeled events, uses at most 500 recent mixed-class examples, stores versioned coefficients atomically, and invalidates ranking caches. Ranking stays deterministic when the model is absent, incompatible, corrupt, or under-labeled; otherwise it blends 75% deterministic score with 25% preference probability. Provider-controlled ranking and feedback are disabled.
 - `RawSourceItem` links now use bounded `{url, relation, title, ordinal}` values. RSS `<comments>` and Atom `rel="replies"` become normalized persisted document links without hostname rules. Story views render distinct “Open original” and “Discussion” actions while Favorite payloads retain the canonical article URL.
 - HTTP actions accept an optional structured JSON body template and generic environment-backed headers. The server, not the browser, reads the named environment variable and encrypts the resulting header through the existing secret store. Local Favorite persistence commits before delivery is queued; failed delivery cannot undo it.
-- Reader title, metadata, and summary have semantic styles and AA contrast. Shared spacing/control tokens, explicit emoji feedback labels, a favicon, and seven official Lucide symbols cover the visual audit without adding client JavaScript to Reader.
+- A dedicated durable `ExecuteAction` queue consumer prevents slow model enrichment from blocking user-triggered Favorite delivery. General job concurrency remains bounded by configuration.
+- Reader title, metadata, and summary use a compact semantic type scale and AA contrast. Shared spacing/control tokens, responsive controls, explicit emoji feedback labels, a favicon, and seven official Lucide symbols cover the visual audit without adding client JavaScript to Reader.
 
 ### HTTP action template contract
 
@@ -20,10 +21,11 @@ Allowed placeholders are `${event}`, `${eventId}`, `${story.id}`, `${story.title
 ### Verification evidence
 
 - `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`: clean.
-- `cargo test --workspace`: 130 tests across 48 suites passed.
-- `pnpm --dir ui typecheck` and `pnpm --dir ui build`: passed; renderer 247/247 statements static.
-- `cargo xtask verify-renderer`: stripped WASM 657,467 bytes; 6 resource-limit tests and 10 renderer view/determinism/escaping tests passed.
-- Playwright: 5/5 passed on isolated ports, including JavaScript-disabled Reader pairing, mobile/focus/hover behavior, typed original/discussion links, UI-created body template, Favorite delivery, idempotency header, and captured JSON payload.
+- `cargo test --workspace --all-targets`: 133 tests across 26 suites passed.
+- `pnpm --dir ui typecheck` and `pnpm --dir ui build`: passed; renderer 253/253 statements static.
+- `cargo xtask verify-renderer`: stripped WASM 656,326 bytes; 6 resource-limit tests and 12 renderer view/determinism/escaping tests passed.
+- Playwright: 6/6 passed on isolated ports, including JavaScript-disabled Reader pairing, responsive navigation, theme persistence, typed original/discussion links, UI-created body template, Favorite delivery, idempotency header, and captured JSON payload.
+- `cargo xtask build-release`, packaged `rill doctor`, and `cargo xtask measure`: passed.
 - Before/after screenshots, accessibility trees, annotations, and objective measurements are ignored runtime artifacts linked from [visual-audit.md](visual-audit.md).
 
 ### Live Karakeep evidence
@@ -39,7 +41,6 @@ An authenticated Karakeep query over all bookmarks found exactly one exact-URL m
 - The preference model is deliberately binary and compact. After at least 50 mixed like/dislike labels, snapshot the same candidate sets and compare deterministic versus blended ranking with AUC and nDCG@10; change the 25% blend only if both improve.
 - Benchmark refit wall time and peak RSS with 100, 500, and 1,000 recent examples. Raise the 500-example cap only if the larger window improves held-out AUC and remains below a 250ms local refit target.
 - Keep attention/vector-native experiments in the sibling `rill-experiments` directory. Reconsider product integration only if a frozen-data comparison beats the logistic baseline on nDCG@10 while preserving bounded memory and restart determinism.
-- Re-run `cargo xtask measure` before a release; the resource table below is the 2026-08-17 baseline and predates these PoC changes.
 
 ## Resulting architecture
 
@@ -81,7 +82,7 @@ renderer.js -> SCRIPTC_CC=zigcc + SCRIPTC_TARGET=wasm32-wasi
 Rust workspace -> thin-LTO stripped rill executable
 ```
 
-The 2026-08-19 verification compiled 247/247 renderer statements statically with no
+The 2026-08-19 verification compiled 253/253 renderer statements statically with no
 dynamic remainder. At runtime `rill-renderer-host` writes one versioned JSON
 request to controlled WASI stdin, invokes `_start` under epoch, fuel, memory,
 input, and output limits, reads controlled stdout, and validates the versioned
@@ -112,20 +113,22 @@ Direct and roundup discoveries may converge on one document/story, while
 many-to-many `document_curators`, raw occurrences, and collection entries keep
 every curator path. Generated summary text never overwrites curator commentary.
 
-## Measured release baseline (2026-08-17)
+## Measured release baseline (2026-08-19)
 
 | Measurement | Actual value |
 |---|---:|
-| release executable | 26,000,208 bytes |
-| renderer WASM | 298,144 bytes |
-| modern initial JS | 19,971 raw / 6,489 Brotli bytes |
-| reader JS | 0 functional bytes; empty 1-byte artifact, no reader script tag |
-| cold startup to ready | 57.4 ms |
-| idle RSS | 94,863,360 bytes (90.47 MiB) |
-| max RSS after 100 SSR renders | 95,928,320 bytes (91.48 MiB) |
-| max RSS during RSS ingestion | 99,106,816 bytes (94.52 MiB) |
-| max RSS during 25-link expansion | 99,155,968 bytes (94.56 MiB) |
-| fixture SQLite database | 847,872 bytes |
+| release executable | 27,434,432 bytes |
+| renderer WASM | 656,326 bytes |
+| modern initial JS | 48,409 raw / 14,795 Brotli bytes |
+| reader JS | no artifact or script tag; 0 bytes |
+| cold startup to ready | 142.0 ms |
+| idle RSS | 199,786,496 bytes (190.53 MiB) |
+| max RSS after 100 SSR renders | 200,933,376 bytes (191.63 MiB) |
+| max RSS during RSS ingestion | 204,832,768 bytes (195.34 MiB) |
+| max RSS during 25-link expansion | 204,832,768 bytes (195.34 MiB) |
+| max sampled macOS physical footprint | 79,971,024 bytes (76.27 MiB) |
+| peak macOS physical footprint | 205,685,384 bytes (196.16 MiB) |
+| fixture SQLite database | 778,240 bytes |
 
 Exact method and scope: [resource-measurements.md](resource-measurements.md).
 

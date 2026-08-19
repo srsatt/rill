@@ -57,25 +57,23 @@ fn matches_filter(candidate: &Candidate, filter: &StreamFilter) -> bool {
 
 fn score_candidate(
     candidate: &mut Candidate,
-    user_id: &str,
-    pool: &rill_db::DbPool,
+    affinities: &AffinityScores,
     positive: Option<&[f32]>,
     negative: Option<&[f32]>,
     stream: Option<&[f32]>,
     preference: Option<&PreferenceModel>,
-) -> Result<(), IntelligenceError> {
+) {
     let age_hours = candidate.published_at.map_or(72.0, |published| {
         unix_now().saturating_sub(published).max(0) as f32 / 3600.0
     });
     let freshness = 1.0 / (1.0 + age_hours / 72.0);
     let coverage = (candidate.coverage.max(1) as f32).ln_1p() * 0.12;
-    let affinity = affinity_score(
-        pool,
-        user_id,
+    let affinity = affinity_score_from(
+        affinities,
         candidate.publisher.as_deref(),
         &candidate.sources,
         &candidate.curators,
-    )?;
+    );
     let positive_similarity = candidate
         .vector
         .as_deref()
@@ -118,7 +116,6 @@ fn score_candidate(
         candidate.explanation["preferenceProbability"] = json!(probability);
         candidate.explanation["fallback"] = json!(false);
     }
-    Ok(())
 }
 
 pub(crate) fn affinity_score(
@@ -128,40 +125,87 @@ pub(crate) fn affinity_score(
     sources: &[String],
     curators: &[String],
 ) -> Result<f32, IntelligenceError> {
-    let mut subjects = Vec::new();
-    if let Some(publisher) = publisher {
-        subjects.push(("publisher", publisher));
-    }
-    subjects.extend(sources.iter().map(|value| ("source", value.as_str())));
-    subjects.extend(curators.iter().map(|value| ("curator", value.as_str())));
-    if subjects.is_empty() {
-        return Ok(0.0);
-    }
+    let scores = load_affinity_scores(pool, user_id)?;
+    Ok(affinity_score_from(
+        &scores, publisher, sources, curators,
+    ))
+}
+
+fn load_affinity_scores(
+    pool: &rill_db::DbPool,
+    user_id: &str,
+) -> Result<AffinityScores, IntelligenceError> {
     let connection = pool.connection()?;
-    let mut total = 0.0_f64;
-    for (kind, id) in &subjects {
-        let mut statement = connection.prepare(
-            "SELECT weight, created_at FROM source_affinity_events
-             WHERE user_id=?1 AND subject_kind=?2 AND subject_id=?3",
-        )?;
-        let events = statement.query_map(params![user_id, kind, id], |row| {
-            Ok((row.get::<_, f64>(0)?, row.get::<_, i64>(1)?))
-        })?;
-        let mut positive = 2.0;
-        let mut negative = 2.0;
-        for event in events {
-            let (weight, created_at) = event?;
-            let age_days = unix_now().saturating_sub(created_at).max(0) as f64 / 86_400.0;
-            let decayed = weight.abs() * 0.5_f64.powf(age_days / 90.0);
-            if weight >= 0.0 {
-                positive += decayed;
-            } else {
-                negative += decayed;
-            }
+    let mut statement = connection.prepare(
+        "SELECT subject_kind, subject_id, weight, created_at
+         FROM source_affinity_events WHERE user_id=?1",
+    )?;
+    let events = statement.query_map([user_id], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, f64>(2)?,
+            row.get::<_, i64>(3)?,
+        ))
+    })?;
+    let now = unix_now();
+    let mut weights = HashMap::<String, HashMap<String, (f64, f64)>>::new();
+    for event in events {
+        let (kind, id, weight, created_at) = event?;
+        let totals = weights
+            .entry(kind)
+            .or_default()
+            .entry(id)
+            .or_insert((2.0, 2.0));
+        let age_days = now.saturating_sub(created_at).max(0) as f64 / 86_400.0;
+        let decayed = weight.abs() * 0.5_f64.powf(age_days / 90.0);
+        if weight >= 0.0 {
+            totals.0 += decayed;
+        } else {
+            totals.1 += decayed;
         }
-        total += positive / (positive + negative) - 0.5;
     }
-    Ok((total / subjects.len() as f64) as f32)
+    Ok(weights
+        .into_iter()
+        .map(|(kind, subjects)| {
+            let subjects = subjects
+                .into_iter()
+                .map(|(id, (positive, negative))| {
+                    (id, (positive / (positive + negative) - 0.5) as f32)
+                })
+                .collect();
+            (kind, subjects)
+        })
+        .collect())
+}
+
+fn affinity_score_from(
+    scores: &AffinityScores,
+    publisher: Option<&str>,
+    sources: &[String],
+    curators: &[String],
+) -> f32 {
+    let mut total = 0.0;
+    let mut count = 0_usize;
+    if let Some(publisher) = publisher {
+        total += scores
+            .get("publisher")
+            .and_then(|subjects| subjects.get(publisher))
+            .copied()
+            .unwrap_or(0.0);
+        count += 1;
+    }
+    for (kind, ids) in [("source", sources), ("curator", curators)] {
+        for id in ids {
+            total += scores
+                .get(kind)
+                .and_then(|subjects| subjects.get(id))
+                .copied()
+                .unwrap_or(0.0);
+            count += 1;
+        }
+    }
+    if count == 0 { 0.0 } else { total / count as f32 }
 }
 
 fn diversify(
@@ -281,6 +325,14 @@ fn topic_suffix(value: &str) -> bool {
 fn comma_list(value: String) -> Vec<String> {
     value
         .split(',')
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+fn control_list(value: String) -> Vec<String> {
+    value
+        .split('\u{1f}')
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
         .collect()

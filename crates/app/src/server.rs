@@ -62,7 +62,7 @@ use crate::{
     model_runtime::RuntimeModelRegistry,
     rate_limit::AttemptLimiter,
     telegram_integration::TelegramIntegration,
-    worker::{IngestionJobHandler, build_worker, run_worker},
+    worker::{IngestionJobHandler, build_workers, run_workers},
 };
 
 const MAX_FORM_BYTES: usize = 64 * 1024;
@@ -199,7 +199,7 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
     let extractor = ArticleExtractor::new(connector_context.http.as_ref().clone());
     let job_queue = JobQueue::new(pool.clone());
     crate::worker::schedule_initial_maintenance(&job_queue)?;
-    let worker = build_worker(
+    let workers = build_workers(
         job_queue.clone(),
         IngestionJobHandler::new(crate::worker::IngestionJobHandlerDependencies {
             ingestion: ingestion.clone(),
@@ -216,8 +216,8 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
         }),
         settings.jobs.concurrency,
     );
-    let worker_task = tokio::spawn(run_worker(
-        worker,
+    let worker_task = tokio::spawn(run_workers(
+        workers,
         Duration::from_millis(settings.jobs.idle_poll_ms),
     ));
     let state = AppState {

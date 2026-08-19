@@ -59,7 +59,39 @@ function actionCard(action: ActionView, reload: () => Promise<void>): HTMLElemen
   return card;
 }
 
+function activateSettingsTabs(): void {
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]"));
+  const panels = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-panel]"));
+  if (tabs.length === 0 || tabs.length !== panels.length) return;
+
+  const select = (tab: HTMLButtonElement, focus: boolean) => {
+    const value = tab.dataset.settingsTab;
+    for (const item of tabs) {
+      const selected = item === tab;
+      item.setAttribute("aria-selected", String(selected));
+      item.tabIndex = selected ? 0 : -1;
+    }
+    for (const panel of panels) panel.hidden = panel.dataset.settingsPanel !== value;
+    if (focus) tab.focus();
+  };
+
+  tabs.forEach((tab, index) => {
+    tab.addEventListener("click", () => select(tab, false));
+    tab.addEventListener("keydown", (event) => {
+      const target = event.key === "Home" ? 0
+        : event.key === "End" ? tabs.length - 1
+          : event.key === "ArrowRight" ? (index + 1) % tabs.length
+            : event.key === "ArrowLeft" ? (index - 1 + tabs.length) % tabs.length
+              : -1;
+      if (target < 0) return;
+      event.preventDefault();
+      select(tabs[target], true);
+    });
+  });
+}
+
 export function activateUserSettings(): void {
+  activateSettingsTabs();
   const form = document.getElementById("favorite-action-create");
   const list = document.getElementById("favorite-action-list");
   if (!(form instanceof HTMLFormElement) || !(list instanceof HTMLDivElement)) return;

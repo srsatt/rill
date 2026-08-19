@@ -105,6 +105,17 @@ struct Candidate {
     explanation: Value,
 }
 
+#[derive(Debug)]
+struct CandidateVariant {
+    candidate: Candidate,
+    preferred: bool,
+    body_chars: usize,
+    direct: bool,
+    readable: bool,
+}
+
+type AffinityScores = HashMap<String, HashMap<String, f32>>;
+
 include!("stream_queries.rs");
 include!("stream_management.rs");
 include!("stream_models.rs");

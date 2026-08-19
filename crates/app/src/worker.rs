@@ -376,7 +376,7 @@ impl IngestionJobHandler {
     }
 }
 
-pub async fn run_worker(worker: Worker<IngestionJobHandler>, idle_poll: Duration) {
+async fn run_worker(worker: Worker<IngestionJobHandler>, idle_poll: Duration) {
     loop {
         match worker.run_once().await {
             Ok(0) => tokio::time::sleep(idle_poll).await,
@@ -389,12 +389,29 @@ pub async fn run_worker(worker: Worker<IngestionJobHandler>, idle_poll: Duration
     }
 }
 
-pub fn build_worker(
+pub async fn run_workers(workers: Vec<Worker<IngestionJobHandler>>, idle_poll: Duration) {
+    let mut tasks = tokio::task::JoinSet::new();
+    for worker in workers {
+        tasks.spawn(run_worker(worker, idle_poll));
+    }
+    while let Some(result) = tasks.join_next().await {
+        if let Err(failure) = result {
+            error!(error = %failure, "job worker stopped");
+        }
+    }
+}
+
+pub fn build_workers(
     queue: rill_jobs::JobQueue,
     handler: IngestionJobHandler,
     concurrency: usize,
-) -> Worker<IngestionJobHandler> {
-    Worker::new(queue, Arc::new(handler), concurrency)
+) -> Vec<Worker<IngestionJobHandler>> {
+    let handler = Arc::new(handler);
+    let mut workers = (0..concurrency.max(1))
+        .map(|_| Worker::new(queue.clone(), handler.clone(), 1))
+        .collect::<Vec<_>>();
+    workers.push(Worker::for_kind(queue, handler, JobKind::ExecuteAction));
+    workers
 }
 
 pub fn schedule_initial_maintenance(queue: &JobQueue) -> Result<(), rill_jobs::QueueError> {

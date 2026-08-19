@@ -78,6 +78,19 @@ test("modern shell starts with a skip link and named navigation landmarks", asyn
   await expect(page.getByRole("navigation", { name: "Streams" })).toBeVisible();
 });
 
+test("account theme picker persists light and dark choices", async ({ page }) => {
+  await login(page);
+  await page.getByRole("button", { name: /Account menu/ }).click();
+  await page.getByRole("menuitemradio", { name: "Dark" }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.getByRole("button", { name: /Account menu/ }).click();
+  await page.getByRole("menuitemradio", { name: "Light" }).click();
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+});
+
 test("reader pairing and feed work with JavaScript disabled", async ({ browser, page }) => {
   await login(page);
   const consoleErrors: string[] = [];
@@ -85,6 +98,7 @@ test("reader pairing and feed work with JavaScript disabled", async ({ browser, 
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   await page.goto("/settings/readers");
+  await page.getByRole("tab", { name: "Devices" }).click();
   await page.getByLabel("Device label").fill("Playwright reader");
   await page.getByRole("button", { name: "Create one-time code" }).click();
   const pairingText = await page.locator(".pairing-code strong").innerText();
@@ -108,6 +122,7 @@ test("source, story feedback, and stream management use the real API", async ({ 
 
   expect((await page.request.delete(`${fixtureUrl}/action/requests`)).ok()).toBe(true);
   await page.goto("/settings/readers");
+  await page.getByRole("tab", { name: "Actions" }).click();
   const actionForm = page.locator("#favorite-action-create");
   await actionForm.getByLabel("Name", { exact: true }).fill("Fixture favorite action");
   await actionForm.getByLabel("Destination URL").fill(`${fixtureUrl}/action`);
@@ -129,7 +144,7 @@ test("source, story feedback, and stream management use the real API", async ({ 
     await page.goto("/stream/home");
     return page.getByRole("link", { name: "Germany changes public software procurement" }).count();
   }, { timeout: 20_000 }).toBe(1);
-  const storyCard = page.locator(".story-card").first();
+  const storyCard = page.locator(".story-row").first();
   const cardBeforeHover = await storyCard.boundingBox();
   expect(cardBeforeHover).not.toBeNull();
   await storyCard.hover();

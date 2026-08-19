@@ -23,6 +23,9 @@ export function ModernFeed(props: { page: FeedPageModel }) {
       <div class="feed-toolbar-fallback" data-enhancement-fallback>
         <nav aria-label="Story view"><a href={pageHref()} aria-current="page">All</a><span aria-disabled="true">Unread</span></nav>
         <a href="/search">Search stories</a>
+        <span aria-disabled="true">All topics</span>
+        <span aria-disabled="true">Ranked</span>
+        <span aria-disabled="true">Compact summaries</span>
       </div>
       <section class="story-list" aria-label="Stories" data-story-list>
         {props.page.stories.length === 0 ? (

@@ -164,6 +164,35 @@ fn renders_long_story_body_within_limits() -> Result<()> {
 }
 
 #[test]
+fn omits_duplicate_story_summary() -> Result<()> {
+    let mut request = request("modern-story", RenderMode::Modern);
+    request.props = story_props(false);
+    request.props["representative"]["summary"] = json!("Repeated article text");
+    request.props["representative"]["bodyText"] = json!("Repeated article text");
+
+    let response = renderer()?.render(&request)?;
+
+    assert_eq!(
+        response.body_html.matches("Repeated article text").count(),
+        1
+    );
+    assert!(!response.body_html.contains("story-deck"));
+    Ok(())
+}
+
+#[test]
+fn omits_redundant_single_source_coverage() -> Result<()> {
+    let mut request = request("modern-story", RenderMode::Modern);
+    request.props = story_props(false);
+
+    let response = renderer()?.render(&request)?;
+
+    assert!(!response.body_html.contains("Coverage map"));
+    assert!(!response.body_html.contains("Coverage (1"));
+    Ok(())
+}
+
+#[test]
 fn renders_original_and_discussion_links() -> Result<()> {
     let mut request = request("reader-story", RenderMode::Reader);
     request.props = story_props(true);
@@ -277,7 +306,10 @@ fn renders_large_feed_within_default_limits() -> Result<()> {
 
     let response = renderer()?.render(&request)?;
     assert_eq!(response.status, 200);
-    assert_eq!(response.body_html.matches(" story-card\"").count(), 50);
+    assert_eq!(
+        response.body_html.matches("class=\"story-row\"").count(),
+        50
+    );
     assert_eq!(
         response.hydration_state["stories"].as_array().map(Vec::len),
         Some(50)
@@ -308,6 +340,9 @@ fn renders_live_sized_feed_within_default_limits() -> Result<()> {
 
     let response = renderer()?.render(&request)?;
     assert_eq!(response.status, 200);
-    assert_eq!(response.body_html.matches(" story-card\"").count(), 50);
+    assert_eq!(
+        response.body_html.matches("class=\"story-row\"").count(),
+        50
+    );
     Ok(())
 }

@@ -3,8 +3,11 @@ import { ModernFeed } from "./pages/ModernFeed";
 import { Story } from "./pages/Story";
 import { Library } from "./pages/Library";
 import { readHydrationState } from "./shared/hydration";
+import { initializeTheme } from "./theme";
 import type { AdminPageModel, FeedPageModel, LibraryPageModel, ReaderSettingsPageModel, SourcesPageModel, StoryPageModel } from "../generated/render-contract";
 import "./app.css";
+
+initializeTheme();
 
 const root = document.getElementById("rill-root");
 if (!(root instanceof HTMLElement)) {

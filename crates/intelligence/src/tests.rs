@@ -642,6 +642,10 @@ mod tests {
         let detail = service.story_detail(&user_id, &story_id).unwrap();
         assert_eq!(detail.coverage_count, 2);
         assert_eq!(detail.representative.document_id, second.document_id);
+        assert_eq!(
+            service.rank_stream_now(&user_id, "home", 20, "test").unwrap()[0].document_id,
+            second.document_id
+        );
         assert!(
             detail
                 .variants
@@ -668,6 +672,10 @@ mod tests {
                 .unwrap()
                 .representative
                 .document_id,
+            first_document_id
+        );
+        assert_eq!(
+            service.rank_stream_now(&user_id, "home", 20, "test").unwrap()[0].document_id,
             first_document_id
         );
     }
