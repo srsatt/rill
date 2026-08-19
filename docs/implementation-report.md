@@ -4,7 +4,7 @@
 
 ### TL;DR
 
-Rill now ranks locally with a durable bounded logistic model, preserves typed original/discussion links from RSS and Atom, and can deliver a Favorite through a configurable JSON HTTP action. The complete visual matrix is captured in [visual-audit.md](visual-audit.md); Reader remains JavaScript-free, all touch targets meet the 44px requirement, and the seven-icon static Lucide sprite retains 100% ScriptC coverage. Local verification is complete. The live Karakeep proof is pending only because `.env` does not yet contain `KARAKEEP_API_TOKEN`.
+Rill now ranks locally with a durable bounded logistic model, preserves typed original/discussion links from RSS and Atom, and can deliver a Favorite through a configurable JSON HTTP action. The complete visual matrix is captured in [visual-audit.md](visual-audit.md); Reader remains JavaScript-free, all touch targets meet the 44px requirement, and the seven-icon static Lucide sprite retains 100% ScriptC coverage. Local verification and the live Karakeep proof are complete.
 
 ### Architecture changes
 
@@ -28,7 +28,11 @@ Allowed placeholders are `${event}`, `${eventId}`, `${story.id}`, `${story.title
 
 ### Live Karakeep evidence
 
-Pending: `.env` has no `KARAKEEP_API_TOKEN` entry. Once supplied, the remaining proof is to create the generic action through settings, Favorite one uniquely identified fixture URL, wait for success, verify exactly one Karakeep bookmark by exact URL, replay the same delivery, and record the surviving bookmark URL/ID without deleting it.
+On 2026-08-19 the generic action was created through `/settings/readers` as `POST https://keep.srsatt.dev/api/v1/bookmarks`, using the documented JSON template and an `Authorization` header sourced in-process from the named `KARAKEEP_API_TOKEN` environment variable. The UI confirmed that the custom body was configured and private headers were encrypted; no token value entered browser state, command arguments, logs, or this report.
+
+The normal Favorite UI delivered story `892844e2-77db-4e5e-98e4-80282dd48d12`, whose canonical URL is `http://127.0.0.1:3014/article/visual-audit-11`. Execution `5d416b66-b7cb-4e1e-86f1-3d7619f6ef85` succeeded on attempt 1 with a 2xx response. Repeating the same Favorite delivery created execution `359c4b14-d926-44fa-ba57-8c28b56db87b`, which also succeeded on attempt 1 with a 2xx response.
+
+An authenticated Karakeep query over all bookmarks found exactly one exact-URL match before and after the replay. The surviving bookmark ID is `bkdpxw4pimmzcrks416735li`; it remains favourited at `http://127.0.0.1:3014/article/visual-audit-11` and was intentionally left in place.
 
 ### Known limitations and exact follow-up experiments
 
@@ -180,7 +184,7 @@ invalid guest JSON, and input/output/fuel/time/memory limits.
 ## Credentials and remaining limitations
 
 Real Telegram bot traffic, live public-preview stability, real IMAP servers,
-remote model vendors, Karakeep until the token-gated proof above, third-party plugins,
+remote model vendors, third-party plugins,
 reverse-proxy TLS, container startup, restore drills, and target-host sustained
 load require real credentials or deployment infrastructure and are not claimed
 as validated. Admins can switch encrypted global embedding, ranking, and

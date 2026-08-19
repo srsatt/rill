@@ -1,6 +1,6 @@
 # Rill PoC completion plan
 
-Status: ready to execute after the ML-experiment context is cleared.
+Status: completed on 2026-08-19. Evidence: [implementation-report.md](implementation-report.md) and [visual-audit.md](visual-audit.md).
 
 ## Goal
 
