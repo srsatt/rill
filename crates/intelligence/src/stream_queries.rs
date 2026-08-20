@@ -426,8 +426,16 @@ impl IntelligenceService {
              SELECT cs.id, d.id, d.title,
              coalesce((SELECT su.summary_text FROM summaries su WHERE su.entity_type='document'
                AND su.entity_id=d.id AND su.input_checksum=d.exact_content_hash
-               ORDER BY su.created_at DESC LIMIT 1), substr(d.body_text, 1, 600)),
-             substr(d.body_text, 1, 600), d.canonical_url, d.publisher, d.language, d.published_at,
+               ORDER BY su.created_at DESC LIMIT 1), CASE
+                 WHEN lower(trim(d.body_text))='comments' AND EXISTS (
+                   SELECT 1 FROM document_links dl
+                   WHERE dl.document_id=d.id AND dl.relation='replies'
+                 ) THEN '' ELSE substr(d.body_text, 1, 600) END),
+             CASE WHEN lower(trim(d.body_text))='comments' AND EXISTS (
+               SELECT 1 FROM document_links dl
+               WHERE dl.document_id=d.id AND dl.relation='replies'
+             ) THEN '' ELSE substr(d.body_text, 1, 600) END,
+             d.canonical_url, d.publisher, d.language, d.published_at,
              coalesce(cs.selected_document_id=d.id, 0), cs.is_read, cs.is_favorite,
              coalesce(topics.topics, ''), coalesce(curators.sources, ''),
              coalesce(curators.curator_ids, ''), coalesce(curators.is_direct, 0),

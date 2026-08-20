@@ -35,7 +35,7 @@ export function Sources(props: { page: SourcesPageModel }) {
       <section aria-labelledby="manual-sources-heading" class="manual-sources">
         <header><h2 id="manual-sources-heading">Add another source</h2><p>Choose a setup method.</p></header>
         <details class="source-method">
-          <summary><span>RSS and Atom</span><small>Feed URL or OPML</small></summary>
+          <summary><span>RSS and Atom<small>Feed URL or OPML</small></span></summary>
           <div class="source-method-body form-columns">
           <form id="rss-create" class="admin-form">
             <label>Name <input name="name" required /></label>
@@ -50,7 +50,7 @@ export function Sources(props: { page: SourcesPageModel }) {
           </div>
         </details>
         <details class="source-method">
-          <summary><span>Email newsletters</span><small>IMAP mailbox</small></summary>
+          <summary><span>Email newsletters<small>IMAP mailbox</small></span></summary>
           <div class="source-method-body">{props.page.emailAvailable ? (
           <form id="email-create" class="admin-form">
             <label>Name <input name="name" required /></label>
@@ -65,7 +65,7 @@ export function Sources(props: { page: SourcesPageModel }) {
           ) : <p>Configure RILL_MASTER_KEY to enable encrypted credentials.</p>}</div>
         </details>
         <details class="source-method">
-          <summary><span>Telegram channels</span><small>Public channel or bot binding</small></summary>
+          <summary><span>Telegram channels<small>Public channel or bot binding</small></span></summary>
           <div class="source-method-body form-columns telegram-settings">
             <form id="telegram-source-create" class="admin-form">
               <label>Channel username <input name="username" placeholder="channelname" pattern="@?[A-Za-z][A-Za-z0-9_]{4,31}" aria-describedby="telegram-username-help" required /></label>

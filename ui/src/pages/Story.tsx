@@ -23,11 +23,11 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
   const hasAlternatives = () => props.page.coverageCount > 1;
   return ModernShell({
       username: props.page.username,
-      activeHref: "/stream/home",
+      activeHref: "/stream/all",
       fontFamily: props.page.fontFamily,
       children: <>
       <header class="story-page-header">
-        <a href="/stream/home">← Back to feed</a>
+        <a href="/stream/all">← Back to feed</a>
         <div
           data-story-actions-enhancement
           data-story-id={props.page.storyId}

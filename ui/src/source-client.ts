@@ -62,7 +62,7 @@ function sourceDetail(source: SourceView, reload: () => Promise<void>): HTMLElem
     if (await jsonMutation(`/api/v1/sources/${source.id}/enabled`, { enabled: !source.enabled }, "Source state could not be changed.")) await reload();
   });
   const remove = node("button", "Remove"); remove.type = "button";
-  remove.className = "danger-action";
+  remove.className = "secondary-action source-remove-action";
   remove.addEventListener("click", async () => {
     const response = await api(`/api/v1/sources/${source.id}`, { method: "DELETE" });
     if (response.ok) await reload(); else report("Source could not be removed.");

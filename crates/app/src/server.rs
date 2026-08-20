@@ -248,7 +248,6 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
 
     let mut app = Router::new()
         .route("/", get(modern_feed))
-        .route("/stream/home", get(modern_feed))
         .route("/stream/{slug}", get(modern_stream))
         .route("/story/{story_id}", get(modern_story))
         .route("/search", get(modern_search))

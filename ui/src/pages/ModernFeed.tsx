@@ -19,7 +19,7 @@ export function ModernFeed(props: { page: FeedPageModel }) {
         </div>
         <div class="feed-toolbar-enhancement" data-feed-toolbar-enhancement />
         <details class="feed-filters feed-toolbar-fallback" data-enhancement-fallback>
-          <summary aria-label="Filters" title="Filters"><SlidersHorizontalIcon /><span class="sr-only">Filters</span></summary>
+          <summary aria-label="Filters" title="Filters"><SlidersHorizontalIcon /><span>Filters</span></summary>
           <div class="feed-filter-panel">
             <nav class="feed-view-filter" aria-label="Story view"><a href={pageHref()} aria-current="page">All</a><span aria-disabled="true">Unread</span></nav>
             <a href="/search">Search stories</a>

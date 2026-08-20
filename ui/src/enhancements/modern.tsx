@@ -172,7 +172,7 @@ function FeedToolbar() {
 
   return (
     <details class="feed-filters">
-      <summary aria-label="Filters" title="Filters"><SlidersHorizontalIcon /><span class="sr-only">Filters</span></summary>
+      <summary aria-label="Filters" title="Filters"><SlidersHorizontalIcon /><span>Filters</span></summary>
       <div class="feed-filter-panel" aria-label="Story filters">
           <Tabs class="feed-view-filter" value={view()} onChange={(value) => { setView(value); updateRows(); }}>
             <TabsList aria-label="Story view">
@@ -293,7 +293,7 @@ function activateInfiniteFeed(): void {
   const observer = new IntersectionObserver((entries) => {
     if (busy || !entries.some((entry) => entry.isIntersecting)) return;
     busy = true;
-    const slug = encodeURIComponent(sentinel.dataset.stream ?? "home");
+    const slug = encodeURIComponent(sentinel.dataset.stream ?? "all");
     void fetch(`/api/v1/streams/${slug}/feed?offset=${offset}&limit=10`, { credentials: "same-origin" })
       .then(async (response) => {
         if (!response.ok) throw new Error();

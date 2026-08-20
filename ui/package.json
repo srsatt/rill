@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "cd .. && cargo xtask test-e2e",
     "screenshots:db": "sh ../tools/create-screenshot-db.sh",
-    "test:screenshots": "cd .. && cargo xtask build-assets && pnpm --dir ui exec playwright test --config playwright.screenshots.config.ts"
+    "test:screenshots": "cd .. && sh tools/create-screenshot-db.sh && cargo xtask build-assets && pnpm --dir ui exec playwright test --config playwright.screenshots.config.ts"
   },
   "dependencies": {
     "@corvu/resizable": "^0.2.5",

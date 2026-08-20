@@ -250,9 +250,13 @@
   .danger-action {
     @apply border-destructive bg-destructive text-destructive-foreground;
   }
-  .feed-page-header { @apply relative; }
+  .feed-page-header {
+    @apply relative;
+    max-width: 56rem;
+    justify-content: flex-start;
+  }
   .feed-toolbar-enhancement,
-  .feed-toolbar-fallback { @apply relative ml-auto text-sm; }
+  .feed-toolbar-fallback { @apply static text-sm; }
   .feed-filters [role="tab"] {
     @apply min-h-11;
   }
@@ -263,14 +267,14 @@
     min-height: var(--rill-control-height);
   }
   .feed-filters {
-    @apply grid min-w-0 justify-items-end;
+    @apply static grid min-w-0 justify-items-end;
   }
   .feed-filters > summary {
-    @apply inline-flex size-11 cursor-pointer list-none items-center justify-center rounded-md border bg-background p-0 text-sm font-medium hover:bg-accent;
+    @apply inline-flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-accent;
   }
   .feed-filters > summary::-webkit-details-marker { display: none; }
   .feed-filter-panel {
-    @apply absolute right-0 top-full z-20 mt-3 grid min-w-0 grid-cols-2 gap-3 rounded-md border bg-background p-3;
+    @apply absolute left-0 top-full z-20 mt-3 grid min-w-0 grid-cols-2 gap-3 rounded-md border bg-background p-3;
     width: min(38rem, calc(100vw - 2rem));
   }
   .feed-filter-panel > * { @apply min-w-0; }
@@ -322,7 +326,7 @@
     display: none;
   }
   .story-copy {
-    @apply grid min-w-0 gap-3 pr-32;
+    @apply grid min-w-0 gap-3 pr-40;
   }
   .story-source-line {
     @apply flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground;
@@ -348,6 +352,9 @@
   }
   .topic-link {
     @apply inline-flex min-h-9 items-center rounded-md bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground no-underline transition-colors hover:bg-accent hover:text-accent-foreground hover:no-underline;
+  }
+  .story-tags .topic-link:first-child {
+    margin-inline-start: -0.75rem;
   }
   .meta {
     @apply text-xs text-muted-foreground;
@@ -514,7 +521,19 @@
   .source-method > summary {
     @apply grid min-h-14 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-3 font-medium;
   }
+  .source-method > summary > span { @apply grid gap-0.5; }
   .source-method > summary small { @apply text-xs font-normal text-muted-foreground; }
+  .source-method > summary::after {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    color: hsl(var(--muted-foreground));
+    content: "";
+    transform: rotate(45deg);
+    transition: transform 120ms ease;
+  }
+  .source-method[open] > summary::after { transform: rotate(225deg); }
   .source-method-body { @apply pb-6 pt-2; }
   .advanced-options {
     @apply rounded-lg border border-dashed bg-muted/30 p-3;
@@ -577,6 +596,8 @@
   .settings-panel .admin-form {
     @apply max-w-2xl gap-4;
   }
+  #user-preferences { @apply gap-5; }
+  .settings-field-group { @apply grid gap-2; }
   .settings-panel .admin-form label {
     @apply gap-2;
   }
@@ -629,6 +650,7 @@
   .source-processing-status { @apply text-xs font-normal text-muted-foreground; }
   .source-settings { @apply border-t pt-3; }
   .source-settings > summary { @apply min-h-11 cursor-pointer py-3 text-sm font-medium; }
+  .source-remove-action { @apply border-destructive/40 text-destructive hover:bg-destructive/10; }
   .admin-card-heading { @apply flex min-h-8 flex-wrap items-center justify-between gap-3; }
   .status-tag { @apply inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-semibold; }
   .status-success { @apply bg-green-100 text-green-800; }
@@ -656,6 +678,7 @@
   .settings-collection-header h2 { @apply text-xl font-semibold; }
   .settings-collection-header p { @apply mt-1 text-sm text-muted-foreground; }
   .settings-browser { @apply grid min-h-[30rem] grid-cols-[minmax(15rem,20rem)_minmax(0,1fr)]; }
+  .configured-sources .settings-browser { min-height: 0; }
   .settings-list { @apply min-h-0 overflow-y-auto border-r p-2; }
   .settings-list-row { @apply grid min-h-14 w-full min-w-0 content-center gap-0.5 rounded-md border-0 bg-transparent px-3 py-2 text-left; }
   .settings-list-row strong { @apply truncate text-sm; }
@@ -1033,6 +1056,7 @@
   align-items: center;
   gap: 0.35rem;
   font-weight: 600;
+  vertical-align: middle;
 }
 .reader-full {
   display: inline-flex;

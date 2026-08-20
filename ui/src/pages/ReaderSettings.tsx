@@ -20,21 +20,27 @@ export function ReaderSettings(props: { page: ReaderSettingsPageModel; csrfToken
       <section class="settings-form-section" aria-labelledby="experience-heading">
         <header><h2 id="experience-heading">Feed behavior</h2><p class="section-description">Choose how Rill presents and assigns stories for this account.</p></header>
         <form id="user-preferences" class="admin-form">
-          <label class="checkbox-label"><input name="aiFreeMode" type="checkbox" /> AI-free mode</label>
-          <p class="field-help">Hide generated summaries and topics, and use deterministic freshness ordering.</p>
-          <label>Stream assignment
-            <select name="streamMembershipMode">
-              <option value="multiple">A story can appear in multiple streams</option>
-              <option value="exclusive">Assign to the first matching subject stream</option>
-            </select>
-          </label>
-          <p class="field-help">Home and All always remain complete views.</p>
-          <label>Typography
-            <select name="fontFamily">
-              <option value="sans">Sans serif</option>
-              <option value="serif">Serif</option>
-            </select>
-          </label>
+          <div class="settings-field-group">
+            <label class="checkbox-label"><input name="aiFreeMode" type="checkbox" /> AI-free mode</label>
+            <p class="field-help">Hide generated summaries and topics, and use deterministic freshness ordering.</p>
+          </div>
+          <div class="settings-field-group">
+            <label>Stream assignment
+              <select name="streamMembershipMode">
+                <option value="multiple">A story can appear in multiple streams</option>
+                <option value="exclusive">Assign to the first matching subject stream</option>
+              </select>
+            </label>
+            <p class="field-help">Home and All always remain complete views.</p>
+          </div>
+          <div class="settings-field-group">
+            <label>Typography
+              <select name="fontFamily">
+                <option value="sans">Sans serif</option>
+                <option value="serif">Serif</option>
+              </select>
+            </label>
+          </div>
           <button type="submit" class="primary-action">Save preferences</button>
           <p id="preferences-status" class="field-help" role="status" aria-live="polite"></p>
         </form>

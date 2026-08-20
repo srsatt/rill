@@ -60,7 +60,7 @@ async fn modern_feed(State(state): State<AppState>, headers: HeaderMap) -> Respo
         &state,
         &principal.user.id,
         &principal.user.username,
-        "home",
+        "all",
         "modern",
         1,
         MODERN_STORY_LIMIT,

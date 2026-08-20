@@ -16,9 +16,9 @@ async fn reader_preferences(State(state): State<AppState>, headers: HeaderMap) -
             .ok()
             .and_then(Result::ok)
             .flatten()
-            .unwrap_or_else(|| "home".to_owned())
+            .unwrap_or_else(|| "all".to_owned())
     } else {
-        "home".to_owned()
+        "all".to_owned()
     };
     let csrf = cookie(&headers, principal_csrf_cookie(&principal)).unwrap_or_default();
     render_page(
@@ -53,7 +53,7 @@ async fn reader_logout(
         Err(response) => return response,
     };
     if principal.kind == SessionKind::Browser {
-        return Redirect::to("/stream/home").into_response();
+        return Redirect::to("/stream/all").into_response();
     }
     let auth = state.auth.clone();
     let user_id = principal.user.id;

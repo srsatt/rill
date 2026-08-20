@@ -11,7 +11,7 @@ async function login(page: import("@playwright/test").Page) {
   await page.getByLabel("Username or email").fill("admin");
   await page.getByLabel("Password").fill("rill-e2e-password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/stream\/home$/);
+  await expect(page).toHaveURL(/\/stream\/all$/);
 }
 
 test("authenticated Solid feed hydrates in place", async ({ page }) => {
@@ -37,20 +37,40 @@ test("authenticated Solid feed hydrates in place", async ({ page }) => {
     }).observe(document, { childList: true, subtree: true });
   });
 
-  await page.goto("/stream/home", { waitUntil: "networkidle" });
-  await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
+  await page.goto("/stream/all", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: "All" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Give Rill one good source" })).toBeVisible();
   const toolbar = page.locator("[data-feed-toolbar-enhancement][data-enhanced=true]");
   await expect(toolbar).toBeVisible();
   const filters = toolbar.locator("summary[aria-label='Filters']");
   await expect(filters).toBeVisible();
+  await expect(filters).toContainText("Filters");
   await expect(page.getByRole("tab", { name: "All" })).toBeHidden();
   await expect(page.getByLabel("Filter stories")).toBeHidden();
+  const titleBox = await page.getByRole("heading", { name: "All" }).boundingBox();
+  const filtersBox = await filters.boundingBox();
+  const titleFilterGap = (filtersBox?.x ?? 0) - (titleBox?.x ?? 0) - (titleBox?.width ?? 0);
+  expect(titleFilterGap).toBeGreaterThanOrEqual(0);
+  expect(titleFilterGap).toBeLessThanOrEqual(24);
   const storyListTop = (await page.locator("[data-story-list]").boundingBox())?.y;
   await filters.click();
   await expect(page.getByRole("tab", { name: "All" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByLabel("Filter stories")).toBeVisible();
   expect((await page.locator("[data-story-list]").boundingBox())?.y).toBe(storyListTop);
+  const tagAlignment = await page.evaluate(() => {
+    const tags = document.createElement("div");
+    tags.className = "story-tags";
+    tags.innerHTML = '<a class="topic-link">layout</a>';
+    document.querySelector("[data-story-list]")?.append(tags);
+    const text = tags.querySelector("a")?.firstChild;
+    if (!text) return Number.POSITIVE_INFINITY;
+    const range = document.createRange();
+    range.selectNode(text);
+    const difference = Math.abs(range.getBoundingClientRect().x - tags.getBoundingClientRect().x);
+    tags.remove();
+    return difference;
+  });
+  expect(tagAlignment).toBeLessThan(1);
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll((links) => links.map((link) => (link as HTMLLinkElement).sheet !== null));
   expect(styles).toEqual([true]);
 
@@ -138,7 +158,7 @@ test("reader pairing and feed work with JavaScript disabled", async ({ browser, 
   await reader.getByRole("button", { name: "Pair reader" }).click();
 
   await expect(reader).toHaveURL(/\/reader$/);
-  await expect(reader.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
+  await expect(reader.getByRole("link", { name: "All" })).toHaveAttribute("aria-current", "page");
   await expect(reader.getByText("No stories yet.")).toBeVisible();
   await expect(reader.locator("script")).toHaveCount(0);
   await context.close();
@@ -149,6 +169,8 @@ test("source, story feedback, and stream management use the real API", async ({ 
 
   expect((await page.request.delete(`${fixtureUrl}/action/requests`)).ok()).toBe(true);
   await page.goto("/settings/readers");
+  await expect(page.locator("#user-preferences")).toHaveCSS("row-gap", "20px");
+  await expect(page.locator("#user-preferences .settings-field-group").first()).toHaveCSS("row-gap", "8px");
   for (const tab of ["Streams", "Actions", "Devices"]) {
     await page.getByRole("tab", { name: tab, exact: true }).click();
     await expect(page.locator(".settings-panel:not([hidden]) .settings-collection")).toHaveCSS("border-top-width", "0px");
@@ -174,7 +196,11 @@ test("source, story feedback, and stream management use the real API", async ({ 
   const source = page.locator(".source-row").filter({ hasText: "Fixture RSS" });
   await expect(source).toBeVisible();
   await source.click();
-  await page.locator("#source-manager-detail").getByRole("button", { name: "Fetch now" }).click();
+  const sourceDetail = page.locator("#source-manager-detail");
+  await expect(page.locator(".configured-sources .settings-browser")).toHaveCSS("min-height", "0px");
+  await expect(sourceDetail.getByRole("button", { name: "Remove" })).toHaveClass(/source-remove-action/);
+  expect(await page.locator(".source-method").first().locator("summary").evaluate((element) => getComputedStyle(element, "::after").content)).not.toBe("none");
+  await sourceDetail.getByRole("button", { name: "Fetch now" }).click();
 
   await expect.poll(async () => {
     await page.goto("/stream/home");
@@ -302,6 +328,10 @@ test("feed loads older stories without pagination and keeps compact actions insi
   await page.locator("[data-feed-toolbar-enhancement] summary[aria-label='Filters']").click();
   await card.hover();
   await expect(actions).toHaveCSS("opacity", "1");
+  await card.locator("h2 a").evaluate((link) => { link.textContent = "A deliberately long story title that verifies wrapping across narrow cards without clipping controls, metadata, summaries, or source names"; });
+  const longTitleBox = await card.locator("h2").boundingBox();
+  const longActionsBox = await actions.boundingBox();
+  expect((longTitleBox?.x ?? 0) + (longTitleBox?.width ?? 0)).toBeLessThanOrEqual(longActionsBox?.x ?? 0);
   const cardBox = await card.boundingBox();
   const actionBox = await card.getByRole("button", { name: "Favorite" }).boundingBox();
   expect(cardBox).not.toBeNull();
@@ -311,9 +341,30 @@ test("feed loads older stories without pagination and keeps compact actions insi
   await expect(card.getByText("1 source in this story")).toHaveCount(0);
 
   await page.goto("/reader/stream/all");
-  const readerLike = page.getByRole("button", { name: "Like", exact: true }).first();
-  await expect(readerLike).toHaveCSS("border-top-width", "0px");
-  expect((await readerLike.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  for (const name of ["Like", "Dislike", "Favorite"]) {
+    const action = page.getByRole("button", { name, exact: true }).first();
+    await expect(action).toHaveCSS("border-top-width", "0px");
+    const box = await action.boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  }
+  const telegramAlignment = await page.evaluate(() => {
+    const meta = document.createElement("p");
+    meta.className = "reader-story-meta";
+    meta.innerHTML = '<a class="reader-telegram-link"><svg class="rill-icon" width="17" height="17"></svg>@genau</a> · 1 min';
+    document.querySelector(".reader")?.append(meta);
+    const channel = meta.querySelector("a")?.lastChild;
+    const time = meta.lastChild;
+    if (!channel || !time) return Number.POSITIVE_INFINITY;
+    const center = (node: Node) => {
+      const range = document.createRange();
+      range.selectNode(node);
+      const box = range.getBoundingClientRect();
+      return box.y + box.height / 2;
+    };
+    return Math.abs(center(channel) - center(time));
+  });
+  expect(telegramAlignment).toBeLessThan(2);
 });
 
 test("account menu stays in the viewport and does not lock page scrolling", async ({ page }) => {

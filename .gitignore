@@ -7,9 +7,8 @@
 /ui/screenshots/
 /artifacts/
 /.env
-/.DS_Store
+.DS_Store
 /.scaffold-work/
 *.db
 *.db-shm
 *.db-wal
-!/ui/tests/screenshots/rill.db

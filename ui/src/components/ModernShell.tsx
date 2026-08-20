@@ -12,7 +12,7 @@ interface ModernShellProps {
 }
 
 const primaryLinks = [
-  { href: "/stream/home", label: "Feed" },
+  { href: "/stream/all", label: "Feed" },
   { href: "/search", label: "Search" },
   { href: "/favorites", label: "Favorites" },
   { href: "/history", label: "History" },
@@ -41,7 +41,7 @@ export function ModernShell(props: ModernShellProps) {
       <a class="skip-link" href="#main-content">Skip to main content</a>
       <aside class="app-sidebar" aria-label="Rill navigation">
         <div class="sidebar-brand">
-          <a class="wordmark" href="/stream/home">Rill</a>
+          <a class="wordmark" href="/stream/all">Rill</a>
         </div>
         <nav class="sidebar-nav" aria-label="Main navigation">
           <ul>
@@ -75,7 +75,7 @@ export function ModernShell(props: ModernShellProps) {
       </aside>
 
       <header class="mobile-header">
-        <a class="wordmark" href="/stream/home">Rill</a>
+        <a class="wordmark" href="/stream/all">Rill</a>
         <div
           data-mobile-nav-enhancement
           data-username={username()}

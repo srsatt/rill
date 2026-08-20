@@ -337,6 +337,40 @@ mod tests {
         assert!(feed[0].summary.starts_with("Germany approved"));
     }
 
+    #[test]
+    fn comments_only_rss_metadata_is_not_a_feed_summary() {
+        let (pool, intelligence, user_id, document_id) = service();
+        pool.with_connection(|connection| {
+            connection.execute(
+                "UPDATE documents SET body_text='Comments' WHERE id=?1",
+                [&document_id],
+            )?;
+            Ok::<_, rusqlite::Error>(())
+        })
+        .unwrap();
+
+        let ordinary_text = intelligence
+            .rank_stream_now(&user_id, "all", 20, "test")
+            .unwrap();
+        assert_eq!(ordinary_text[0].summary, "Comments");
+
+        pool.with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO document_links(document_id, normalized_url, original_url, relation,
+                 title, ordinal) VALUES (?1, 'https://example.test/comments',
+                 'https://example.test/comments', 'replies', NULL, 1)",
+                [&document_id],
+            )?;
+            Ok::<_, rusqlite::Error>(())
+        })
+        .unwrap();
+
+        let rss_metadata = intelligence
+            .rank_stream_now(&user_id, "all", 20, "test")
+            .unwrap();
+        assert!(rss_metadata[0].summary.is_empty());
+    }
+
     #[tokio::test]
     async fn exclusive_stream_mode_assigns_to_first_matching_subject_stream() {
         let (pool, intelligence, user_id, document_id) = service();

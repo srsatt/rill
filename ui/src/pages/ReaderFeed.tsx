@@ -13,7 +13,7 @@ export function ReaderFeed(props: { page: FeedPageModel; csrfToken: string }) {
       <header class="reader-header">
       <div class="reader-brand">
         <a class="reader-wordmark" href="/reader">Rill</a>
-        <a class="reader-full" href="/stream/home" aria-label="Open full Rill" title="Full Rill"><ExternalLinkIcon /><span class="sr-only">Full Rill</span></a>
+        <a class="reader-full" href="/stream/all" aria-label="Open full Rill" title="Full Rill"><ExternalLinkIcon /><span class="sr-only">Full Rill</span></a>
       </div>
       <nav aria-label="Streams">
         {props.page.streams.map((stream) => (

@@ -19,9 +19,9 @@ async fn reader_feed(
             .ok()
             .and_then(Result::ok)
             .flatten()
-            .unwrap_or_else(|| "home".to_owned())
+            .unwrap_or_else(|| "all".to_owned())
     } else {
-        "home".to_owned()
+        "all".to_owned()
     };
     let page_number = query.page.unwrap_or(1);
     if !(1..=5).contains(&page_number) {
@@ -46,7 +46,7 @@ async fn reader_feed(
 
 async fn login_page(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if browser_principal(&state, &headers).await.is_ok() {
-        return Redirect::to("/stream/home").into_response();
+        return Redirect::to("/stream/all").into_response();
     }
     no_store(render_login(state, None).await)
 }

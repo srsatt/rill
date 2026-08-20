@@ -94,7 +94,7 @@ async fn reader_or_browser_write_principal(
 }
 
 fn session_redirect(state: &AppState, session: rill_auth::BrowserSession) -> Response {
-    let mut response = Redirect::to("/stream/home").into_response();
+    let mut response = Redirect::to("/stream/all").into_response();
     set_browser_session_cookies(state, &mut response, &session);
     no_store(response)
 }
