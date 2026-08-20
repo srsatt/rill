@@ -1,4 +1,4 @@
-const MODERN_STORY_LIMIT: usize = 25;
+const MODERN_STORY_LIMIT: usize = 5;
 
 async fn metrics_endpoint(
     State(state): State<AppState>,

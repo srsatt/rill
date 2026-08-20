@@ -47,6 +47,14 @@ pub struct StreamView {
     pub filter: StreamFilter,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UserPreferences {
+    pub ai_free_mode: bool,
+    pub stream_membership_mode: String,
+    pub font_family: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateStreamInput {
     pub name: String,
@@ -90,6 +98,7 @@ struct Candidate {
     document_id: String,
     title: String,
     summary: String,
+    raw_excerpt: String,
     canonical_url: Option<String>,
     publisher: Option<String>,
     language: Option<String>,

@@ -11,7 +11,9 @@ export default defineConfig({
   },
   build: {
     outDir: "dist/client",
-    emptyOutDir: true,
+    // Keep hashed files referenced by pages that were open while dev rebuilds.
+    // Clean release workspaces still start empty, while live pages avoid 404s.
+    emptyOutDir: false,
     manifest: true,
     rollupOptions: {
       input: {

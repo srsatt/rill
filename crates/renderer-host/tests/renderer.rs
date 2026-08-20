@@ -246,7 +246,7 @@ fn renders_every_page_template() -> Result<()> {
             "reader-feed",
             RenderMode::Reader,
             request("reader-feed", RenderMode::Reader).props,
-            "Reader settings",
+            "Full Rill",
         ),
         (
             "reader-pair",
@@ -283,6 +283,9 @@ fn renders_every_page_template() -> Result<()> {
             .with_context(|| format!("render template {template}"))?;
         assert_eq!(response.status, 200, "template {template}");
         assert!(response.body_html.contains(needle), "template {template}");
+        if template == "modern-library" {
+            assert!(!response.body_html.contains("Library views"));
+        }
         if mode == RenderMode::Reader {
             assert!(response.hydration_state.is_null(), "template {template}");
         }
@@ -318,20 +321,25 @@ fn renders_large_feed_within_default_limits() -> Result<()> {
 }
 
 #[test]
-fn renders_live_sized_feed_within_default_limits() -> Result<()> {
+fn renders_live_sized_initial_feed_within_default_limits() -> Result<()> {
     let mut request = request("modern-feed", RenderMode::Modern);
     let story = request.props["stories"][0].clone();
     request.props["stories"] = Value::Array(
-        (0..50)
+        (0..5)
             .map(|index| {
                 let mut story = story.clone();
                 story["id"] = json!(format!("live-story-{index}"));
                 story["title"] = json!(format!(
                     "Story {index}: {}",
-                    "international source signal ".repeat(3)
+                    "international source signal ".repeat(8)
                 ));
                 story["summary"] = json!(
-                    "Detailed multilingual context: café, Berlin, 東京, Telegram, RSS. ".repeat(8)
+                    "Detailed multilingual context: café, Berlin, 東京, Telegram, RSS. ".repeat(13)
+                );
+                story["tags"] = json!(
+                    (0..8)
+                        .map(|tag| format!("reader topic {index} {tag} with detail"))
+                        .collect::<Vec<_>>()
                 );
                 story
             })
@@ -340,9 +348,38 @@ fn renders_live_sized_feed_within_default_limits() -> Result<()> {
 
     let response = renderer()?.render(&request)?;
     assert_eq!(response.status, 200);
-    assert_eq!(
-        response.body_html.matches("class=\"story-row\"").count(),
-        50
+    assert_eq!(response.body_html.matches("class=\"story-row\"").count(), 5);
+    Ok(())
+}
+
+#[test]
+fn renders_full_reader_page_within_default_limits() -> Result<()> {
+    let mut request = request("reader-feed", RenderMode::Reader);
+    let story = request.props["stories"][0].clone();
+    request.props["stories"] = Value::Array(
+        (0..20)
+            .map(|index| {
+                let mut story = story.clone();
+                story["id"] = json!(format!("reader-story-{index}"));
+                story["title"] = json!(format!(
+                    "Story {index}: {}",
+                    "international source signal ".repeat(24)
+                ));
+                story["summary"] = json!(
+                    "Detailed multilingual context: café, Berlin, 東京, Telegram, RSS. ".repeat(36)
+                );
+                story["tags"] = json!(
+                    (0..8)
+                        .map(|tag| format!("reader topic {index} {tag} with detail"))
+                        .collect::<Vec<_>>()
+                );
+                story
+            })
+            .collect(),
     );
+
+    let response = renderer()?.render(&request)?;
+    assert_eq!(response.status, 200);
+    assert_eq!(response.body_html.matches("<article").count(), 20);
     Ok(())
 }

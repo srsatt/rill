@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use ammonia::clean;
 use rill_collection_expansion::{
     CollectionPolicy, derived_identity, detect_collection_with_diagnostics, provider_request,
     validate_provider_response,
@@ -9,7 +8,7 @@ pub use rill_collection_expansion::{DetectionMode, ParentDisplayPolicy};
 use rill_db::{DbError, DbPool};
 use rill_dedup::{CuratorProvenance, DedupError, DedupService, canonicalize_url, content_checksum};
 use rill_domain::{ExternalLink, ItemShape, LinkRelation, NormalizedDocument, RawSourceItem};
-use rill_extraction::ExtractedArticle;
+use rill_extraction::{ExtractedArticle, clean_content_html, clean_content_text};
 use rill_jobs::{EnqueueOptions, JobKind, JobQueue, QueueError};
 use rill_model_api::{CollectionParserProvider, ModelError};
 use rill_source_api::{ConnectorContext, ConnectorError, SourceBatch, SourceConnector};
@@ -76,6 +75,8 @@ pub struct SourceView {
     pub visibility: String,
     pub audience: String,
     pub enabled: bool,
+    pub editable: bool,
+    pub processing_prompt: String,
     pub last_success_at: Option<i64>,
     pub consecutive_failures: u32,
     pub last_error_message: Option<String>,

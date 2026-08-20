@@ -1,6 +1,5 @@
 import type { StoryCardModel } from "../../generated/render-contract";
-import { badge } from "../server/solid-ui";
-import { BookmarkIcon } from "./icons";
+import { BookmarkIcon, ThumbsDownIcon, ThumbsUpIcon } from "./icons";
 
 export function StoryCard(props: { story: StoryCardModel }) {
   const tags = props.story.tags || [];
@@ -32,24 +31,26 @@ export function StoryCard(props: { story: StoryCardModel }) {
     <article class="story-row" data-story-id={props.story.id} data-published-at={props.story.publishedAt} data-topics={tags.join(",")}>
       <div class="story-card-content">
           <div class="story-copy">
-            <div class="story-source-line">
-              {badge(props.story.source, "outline")}
-              {props.story.curator ? <span>via {props.story.curator}</span> : null}
-              <span>{props.story.readingMinutes} min</span>
+              <h2><a href={`/story/${props.story.id}`}>{props.story.title}</a></h2>
+              {props.story.summary && props.story.summary !== "No summary available." ? <p class="summary">{props.story.summary}</p> : null}
+              <div class="story-source-line">
+                {props.story.canonicalUrl
+                  ? <a class="story-source-link" href={props.story.canonicalUrl} target="_blank" rel="noopener noreferrer">{props.story.source}</a>
+                  : <span>{props.story.source}</span>}
+                {props.story.curator ? <span>via {props.story.curator}</span> : null}
+                <span>{props.story.readingMinutes} min</span>
+              </div>
+              {tags.length > 0 ? <div class="story-tags" aria-label="Topics">
+                {tags.map((tag) => <a class="topic-link" href={`/search?topic=${encodeURIComponent(tag)}`}>{tag}</a>)}
+              </div> : null}
+              {props.story.coverageCount > 1 ? <p class="meta">{props.story.coverageCount} sources</p> : null}
             </div>
-            <h2><a href={`/story/${props.story.id}`}>{props.story.title}</a></h2>
-            <p class="summary">{props.story.summary}</p>
-            {tags.length > 0 ? <div class="story-tags" aria-label="Topics">
-              {tags.map((tag) => <a class="topic-link" href={`/search?topic=${encodeURIComponent(tag)}`}>{tag}</a>)}
-            </div> : null}
-            <p class="meta">{props.story.coverageCount} {props.story.coverageCount === 1 ? "source" : "sources"} in this story</p>
-          </div>
-          <div class="story-feedback-enhancement" data-story-feedback-enhancement data-story-id={props.story.id} />
-          <div class="feedback" aria-label="Story feedback" data-enhancement-fallback>
-            <button type="button" data-feedback="like" aria-pressed="false" onClick={selectFeedback}>👍 Like</button>
-            <button type="button" data-feedback="dislike" aria-pressed="false" onClick={selectFeedback}>👎 Dislike</button>
-            <button type="button" data-feedback="favorite" aria-pressed="false" onClick={selectFeedback}><BookmarkIcon /> Favorite</button>
-          </div>
+            <div class="story-feedback-enhancement" data-story-feedback-enhancement data-story-id={props.story.id} />
+            <div class="feedback" aria-label="Story feedback" data-enhancement-fallback>
+              <button type="button" data-feedback="like" aria-label="Like" title="Like" aria-pressed="false" onClick={selectFeedback}><ThumbsUpIcon /><span class="feedback-label">Like</span></button>
+              <button type="button" data-feedback="dislike" aria-label="Dislike" title="Dislike" aria-pressed="false" onClick={selectFeedback}><ThumbsDownIcon /><span class="feedback-label">Dislike</span></button>
+              <button type="button" data-feedback="favorite" aria-label="Favorite" title="Favorite" aria-pressed="false" onClick={selectFeedback}><BookmarkIcon /><span class="feedback-label">Favorite</span></button>
+            </div>
       </div>
     </article>
   );

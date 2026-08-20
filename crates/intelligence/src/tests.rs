@@ -5,10 +5,40 @@ mod tests {
     use rill_model_api::{
         ExtractiveSummaryProvider, FeatureHashEmbeddingProvider, ModelError, ModelHealth,
         ModelIdentity, RankRequest, RankResponse, RecommendationFeedbackEvent,
-        RecommendationProvider,
+        RecommendationProvider, SummaryProvider, SummaryRequest, SummaryResponse, TopicTag,
     };
 
     struct FailingRecommendation;
+
+    struct SourceInstructionSummary;
+
+    #[async_trait::async_trait]
+    impl SummaryProvider for SourceInstructionSummary {
+        fn identity(&self) -> ModelIdentity {
+            ModelIdentity {
+                provider: "test".into(),
+                model: "source-instructions".into(),
+                version: "1".into(),
+            }
+        }
+
+        async fn summarize(&self, request: SummaryRequest) -> Result<SummaryResponse, ModelError> {
+            let include = !request
+                .custom_instruction
+                .as_deref()
+                .unwrap_or_default()
+                .contains("Remove product launches");
+            Ok(SummaryResponse {
+                text: "Processed summary.".into(),
+                tags: vec![TopicTag { label: "technology".into(), confidence: 0.9 }],
+                include,
+            })
+        }
+
+        async fn health(&self) -> Result<ModelHealth, ModelError> {
+            Ok(ModelHealth { ready: true, detail: "ready".into() })
+        }
+    }
 
     #[async_trait::async_trait]
     impl RecommendationProvider for FailingRecommendation {
@@ -145,6 +175,117 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn source_instruction_can_filter_document_from_feed() {
+        let pool = DbPool::open_in_memory().unwrap();
+        let user_id = Uuid::new_v4().to_string();
+        pool.with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO users(id, username, role) VALUES (?1, 'reader', 'user')",
+                [&user_id],
+            )?;
+            connection.execute_batch(
+                "INSERT INTO source_definitions(id, kind, display_name) VALUES
+                   ('fixture:rss', 'fixture-rss', 'Fixture RSS');",
+            )?;
+            connection.execute(
+                "INSERT INTO source_instances(
+                   id, definition_id, owner_user_id, name, visibility, visibility_scope,
+                   processing_prompt, audience
+                 ) VALUES ('feed', 'fixture:rss', ?1, 'Feed', 'private', ?2,
+                   'Remove product launches from the feed', 'owner')",
+                params![user_id, format!("user:{user_id}")],
+            )?;
+            Ok::<_, rusqlite::Error>(())
+        })
+        .unwrap();
+        let mut source_document = rill_domain_fixture();
+        source_document.visibility_scope = format!("user:{user_id}");
+        let document = DedupService::new(pool.clone())
+            .upsert_document(
+                &source_document,
+                &CuratorProvenance {
+                    curator_kind: "source".into(),
+                    curator_id: "feed".into(),
+                    source_instance_id: Some("feed".into()),
+                    raw_item_id: None,
+                    collection_entry_id: None,
+                },
+            )
+            .unwrap();
+        let service = IntelligenceService::new(
+            pool.clone(),
+            Arc::new(FeatureHashEmbeddingProvider::new(32).unwrap()),
+            Arc::new(SourceInstructionSummary),
+            None,
+        );
+
+        service.process_summary(&document.document_id).await.unwrap();
+
+        let visible: i64 = pool
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT count(*) FROM document_access WHERE document_id=?1",
+                    [&document.document_id],
+                    |row| row.get(0),
+                )
+            })
+            .unwrap();
+        assert_eq!(visible, 0);
+        assert!(
+            service
+                .rank_stream_now(&user_id, "all", 20, "test")
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn recurring_posts_from_one_publisher_do_not_become_coverage() {
+        let (pool, service, _, first_document_id) = service();
+        service.process_embedding(&first_document_id).await.unwrap();
+        let mut recurring = rill_domain_fixture();
+        recurring.title.push_str(" — daily edition");
+        recurring.body_text.push_str(" Daily edition.");
+        recurring.canonical_url = Some("https://example.test/article-2".into());
+        let second = DedupService::new(pool.clone())
+            .upsert_document(
+                &recurring,
+                &CuratorProvenance {
+                    curator_kind: "source".into(), curator_id: "feed".into(),
+                    source_instance_id: None, raw_item_id: None, collection_entry_id: None,
+                },
+            )
+            .unwrap();
+        service.process_embedding(&second.document_id).await.unwrap();
+
+        assert_ne!(story_id(&pool, &first_document_id), story_id(&pool, &second.document_id));
+    }
+
+    #[tokio::test]
+    async fn reprocessing_old_documents_does_not_cluster_with_future_stories() {
+        let (pool, service, _, first_document_id) = service();
+        service.process_embedding(&first_document_id).await.unwrap();
+        let mut old = rill_domain_fixture();
+        old.title.push_str(" — archived report");
+        old.body_text.push_str(" Archived report.");
+        old.publisher = Some("archive.test".into());
+        old.canonical_url = Some("https://archive.test/article".into());
+        old.published_at = Some(unix_now() - 10 * 24 * 60 * 60);
+        let second = DedupService::new(pool.clone())
+            .upsert_document(
+                &old,
+                &CuratorProvenance {
+                    curator_kind: "source".into(), curator_id: "archive".into(),
+                    source_instance_id: None, raw_item_id: None, collection_entry_id: None,
+                },
+            )
+            .unwrap();
+        service.process_embedding(&second.document_id).await.unwrap();
+
+        assert_ne!(story_id(&pool, &first_document_id), story_id(&pool, &second.document_id));
+    }
+
+    #[tokio::test]
     async fn stream_topic_filters_use_persisted_enrichment_tags() {
         let (_, intelligence, user_id, document_id) = service();
         intelligence.process_summary(&document_id).await.unwrap();
@@ -172,6 +313,69 @@ mod tests {
             .unwrap();
         assert_eq!(feed.len(), 1);
         assert!(feed[0].topics.iter().any(|topic| topic == "germany"));
+    }
+
+    #[tokio::test]
+    async fn ai_free_mode_uses_raw_text_without_topics_or_model_ranking() {
+        let (_, intelligence, user_id, document_id) = service();
+        intelligence.process_summary(&document_id).await.unwrap();
+        intelligence
+            .update_user_preferences(
+                &user_id,
+                &UserPreferences {
+                    ai_free_mode: true,
+                    stream_membership_mode: "multiple".into(),
+                    font_family: "sans".into(),
+                },
+            )
+            .unwrap();
+
+        let feed = intelligence.rank_stream_now(&user_id, "all", 20, "test").unwrap();
+        assert_eq!(feed.len(), 1);
+        assert!(feed[0].topics.is_empty());
+        assert_eq!(feed[0].explanation["aiFree"], true);
+        assert!(feed[0].summary.starts_with("Germany approved"));
+    }
+
+    #[tokio::test]
+    async fn exclusive_stream_mode_assigns_to_first_matching_subject_stream() {
+        let (pool, intelligence, user_id, document_id) = service();
+        pool.with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO document_topics(document_id, topic, confidence, provider, model,
+                 model_version, input_checksum)
+                 SELECT id, 'aardvark', 0.9, 'fixture', 'topics', '1', exact_content_hash
+                 FROM documents WHERE id=?1",
+                [&document_id],
+            )
+        })
+        .unwrap();
+        for slug in ["first", "second"] {
+            intelligence
+                .create_stream(
+                    &user_id,
+                    &CreateStreamInput {
+                        name: slug.into(), slug: slug.into(), icon: None,
+                        filter: StreamFilter { include_topics: vec!["aardvark".into()], ..Default::default() },
+                        semantic_description: None, ranking_instruction: None,
+                    },
+                )
+                .await
+                .unwrap();
+        }
+        intelligence
+            .update_user_preferences(
+                &user_id,
+                &UserPreferences {
+                    ai_free_mode: false,
+                    stream_membership_mode: "exclusive".into(),
+                    font_family: "sans".into(),
+                },
+            )
+            .unwrap();
+
+        assert_eq!(intelligence.rank_stream_now(&user_id, "first", 20, "test").unwrap().len(), 1);
+        assert!(intelligence.rank_stream_now(&user_id, "second", 20, "test").unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -529,21 +733,25 @@ mod tests {
             .map(|stream| stream.slug)
             .collect::<Vec<_>>();
         slugs.retain(|slug| slug != "local-ai");
-        slugs.insert(0, "local-ai".into());
+        slugs.insert(1, "local-ai".into());
         intelligence
             .reorder_streams(&user_id, &slugs)
             .unwrap();
         assert_eq!(
-            intelligence.list_streams(&user_id).unwrap()[0].slug,
+            intelligence.list_streams(&user_id).unwrap()[1].slug,
             "local-ai"
         );
+        let mut invalid = slugs.clone();
+        invalid.swap(0, 1);
+        assert!(intelligence.reorder_streams(&user_id, &invalid).is_err());
         intelligence.delete_stream(&user_id, "local-ai").unwrap();
-        assert_eq!(intelligence.list_streams(&user_id).unwrap().len(), 5);
+        assert_eq!(intelligence.list_streams(&user_id).unwrap().len(), 6);
         assert!(intelligence.delete_stream(&user_id, "home").is_err());
+        assert!(intelligence.delete_stream(&user_id, "all").is_err());
     }
 
     #[test]
-    fn first_stream_listing_seeds_five_high_level_streams_once() {
+    fn first_stream_listing_seeds_default_streams_once() {
         let (pool, intelligence, user_id, _) = service();
         let streams = intelligence.list_streams(&user_id).unwrap();
         assert_eq!(
@@ -551,9 +759,9 @@ mod tests {
                 .iter()
                 .map(|stream| stream.slug.as_str())
                 .collect::<Vec<_>>(),
-            ["home", "technology", "ai", "world", "science"]
+            ["all", "home", "technology", "ai", "world", "science"]
         );
-        assert_eq!(intelligence.list_streams(&user_id).unwrap().len(), 5);
+        assert_eq!(intelligence.list_streams(&user_id).unwrap().len(), 6);
         let queued: i64 = pool
             .with_connection(|connection| {
                 connection.query_row(
@@ -563,7 +771,7 @@ mod tests {
                 )
             })
             .unwrap();
-        assert_eq!(queued, 5);
+        assert_eq!(queued, 6);
     }
 
     #[tokio::test]

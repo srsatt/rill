@@ -40,12 +40,14 @@ pub struct SummaryRequest {
     pub canonical_url: Option<String>,
     pub language: Option<String>,
     pub text: String,
+    pub custom_instruction: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct SummaryResponse {
     pub text: String,
     pub tags: Vec<TopicTag>,
+    pub include: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -129,7 +131,8 @@ pub struct CollectionParseResponse {
     pub entries: Vec<CollectionParseEntry>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelHealth {
     pub ready: bool,
     pub detail: String,
@@ -247,6 +250,7 @@ impl SummaryProvider for ExtractiveSummaryProvider {
         Ok(SummaryResponse {
             text: if text.is_empty() { request.title } else { text },
             tags,
+            include: true,
         })
     }
 
@@ -408,6 +412,7 @@ mod tests {
                 canonical_url: None,
                 language: None,
                 text: "Germany approved the procurement change on Tuesday. The first migrations begin in October. A third sentence is omitted.".into(),
+                custom_instruction: None,
             })
             .await
             .unwrap();

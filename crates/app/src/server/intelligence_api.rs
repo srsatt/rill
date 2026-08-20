@@ -15,6 +15,48 @@ async fn api_streams(State(state): State<AppState>, headers: HeaderMap) -> Respo
     }
 }
 
+async fn api_preferences(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let principal = match browser_principal(&state, &headers).await {
+        Ok(principal) => principal,
+        Err(error) => return auth_error(error),
+    };
+    let intelligence = state.intelligence.clone();
+    let user_id = principal.user.id;
+    match tokio::task::spawn_blocking(move || intelligence.user_preferences(&user_id)).await {
+        Ok(Ok(preferences)) => no_store(Json(preferences).into_response()),
+        Ok(Err(error)) => intelligence_error(error),
+        Err(error) => {
+            tracing::error!(%error, "preference listing task failed");
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "preferences unavailable")
+        }
+    }
+}
+
+async fn api_update_preferences(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(preferences): Json<UserPreferences>,
+) -> Response {
+    let principal = match write_principal(&state, &headers).await {
+        Ok(principal) => principal,
+        Err(response) => return response,
+    };
+    let intelligence = state.intelligence.clone();
+    let user_id = principal.user.id;
+    match tokio::task::spawn_blocking(move || {
+        intelligence.update_user_preferences(&user_id, &preferences)
+    })
+    .await
+    {
+        Ok(Ok(preferences)) => no_store(Json(preferences).into_response()),
+        Ok(Err(error)) => intelligence_error(error),
+        Err(error) => {
+            tracing::error!(%error, "preference update task failed");
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "preferences unavailable")
+        }
+    }
+}
+
 async fn api_create_stream(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -122,13 +164,24 @@ async fn api_stream_feed(
     };
     let intelligence = state.intelligence.clone();
     let user_id = principal.user.id;
-    let limit = query.limit.unwrap_or(50);
+    let limit = query.limit.unwrap_or(25).clamp(1, 50);
+    let offset = query.offset.min(100);
+    let requested = offset.saturating_add(limit).saturating_add(1).min(101);
     match tokio::task::spawn_blocking(move || {
-        intelligence.rank_stream_now(&user_id, &slug, limit, "modern")
+        intelligence.rank_stream_now(&user_id, &slug, requested, "modern")
     })
     .await
     {
-        Ok(Ok(stories)) => no_store(Json(stories).into_response()),
+        Ok(Ok(stories)) => {
+            let has_more = stories.len() > offset.saturating_add(limit);
+            let stories = stories
+                .into_iter()
+                .skip(offset)
+                .take(limit)
+                .map(story_card)
+                .collect();
+            no_store(Json(StreamFeedResponse { stories, has_more }).into_response())
+        }
         Ok(Err(error)) => intelligence_error(error),
         Err(error) => {
             error!(error = %error, "stream API task failed");

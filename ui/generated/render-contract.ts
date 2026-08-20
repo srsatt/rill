@@ -8,9 +8,9 @@ export type RenderResponse = { version: number, status: number, headHtml: string
 
 export type StreamLink = { name: string, slug: string, };
 
-export type StoryCardModel = { id: string, title: string, summary: string, source: string, curator: string | null, publishedAt: string, coverageCount: number, readingMinutes: number, tags: Array<string>, };
+export type StoryCardModel = { id: string, title: string, summary: string, source: string, canonicalUrl: string | null, curator: string | null, publishedAt: string, coverageCount: number, readingMinutes: number, tags: Array<string>, };
 
-export type FeedPageModel = { title: string, activeStream: string, streams: Array<StreamLink>, stories: Array<StoryCardModel>, username: string, page: number, previousPage: number | null, nextPage: number | null, };
+export type FeedPageModel = { title: string, activeStream: string, streams: Array<StreamLink>, stories: Array<StoryCardModel>, username: string, fontFamily: string, page: number, previousPage: number | null, nextPage: number | null, };
 
 export type LibraryPageModel = { title: string, username: string, kind: string, query: string | null, stories: Array<StoryCardModel>, };
 
@@ -22,7 +22,7 @@ export type StoryLinkModel = { url: string, relation: string, title: string | nu
 
 export type StoryVariantModel = { documentId: string, title: string, summary: string, bodyText: string, canonicalUrl: string | null, links: Array<StoryLinkModel>, author: string | null, publisher: string | null, language: string | null, publishedAt: string | null, curators: Array<CuratorPathModel>, selected: boolean, };
 
-export type StoryPageModel = { title: string, storyId: string, representative: StoryVariantModel, variants: Array<StoryVariantModel>, coverageCount: number, read: boolean, favorite: boolean, explicitFeedback: string | null, reader: boolean, };
+export type StoryPageModel = { title: string, username: string, fontFamily: string, storyId: string, representative: StoryVariantModel, variants: Array<StoryVariantModel>, coverageCount: number, read: boolean, favorite: boolean, explicitFeedback: string | null, reader: boolean, };
 
 export type ReaderPreferencesPageModel = { title: string, username: string, streams: Array<StreamLink>, activeStream: string, };
 

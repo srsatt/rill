@@ -7,14 +7,14 @@ const port = Number(process.env.RILL_FIXTURE_PORT ?? "3011");
 const localize = (source) => Buffer.from(source.replaceAll("127.0.0.1:3011", `127.0.0.1:${port}`));
 const feed = localize(await readFile(new URL("../fixtures/rss/feed.xml", import.meta.url), "utf8"));
 const largeFeed = localize(await readFile(new URL("../fixtures/rss/large-roundup.xml", import.meta.url), "utf8"));
-const visualAuditFeed = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Rill visual audit</title><link>http://127.0.0.1:${port}/</link><description>Deterministic visual audit stories</description>${Array.from({ length: 25 }, (_, index) => {
+const visualAuditFeed = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Rill visual audit</title><link>http://127.0.0.1:${port}/</link><description>Deterministic visual audit stories</description>${Array.from({ length: 30 }, (_, index) => {
   const number = index + 1;
   const title = number === 1
     ? "A deliberately long story title that verifies wrapping across narrow cards without clipping controls, metadata, summaries, or source names"
     : `Visual audit story ${String(number).padStart(2, "0")} with distinct deterministic content`;
   return `<item><guid>visual-audit-${number}</guid><title>${title}</title><link>http://127.0.0.1:${port}/article/visual-audit-${number}</link><comments>http://127.0.0.1:${port}/discussion/visual-audit-${number}</comments><description>Story ${number} carries distinct deterministic content for pagination, ranking, wrapping, and responsive layout checks. The summary remains long enough to exercise several lines without relying on public services.</description><pubDate>Tue, ${String(number).padStart(2, "0")} Jul 2026 12:00:00 GMT</pubDate></item>`;
 }).join("")}</channel></rss>`);
-assert.equal((visualAuditFeed.toString().match(/<item>/g) ?? []).length, 25);
+assert.equal((visualAuditFeed.toString().match(/<item>/g) ?? []).length, 30);
 const actionRequests = [];
 
 function json(response, value) {

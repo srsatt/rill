@@ -1,4 +1,10 @@
-async fn reader_feed(State(state): State<AppState>, headers: HeaderMap) -> Response {
+const READER_STORY_LIMIT: usize = 20;
+
+async fn reader_feed(
+    State(state): State<AppState>,
+    Query(query): Query<ReaderPageQuery>,
+    headers: HeaderMap,
+) -> Response {
     let principal = match reader_or_browser_principal(&state, &headers).await {
         Ok(principal) => principal,
         Err(_) => return Redirect::to("/reader/pair").into_response(),
@@ -17,14 +23,18 @@ async fn reader_feed(State(state): State<AppState>, headers: HeaderMap) -> Respo
     } else {
         "home".to_owned()
     };
+    let page_number = query.page.unwrap_or(1);
+    if !(1..=5).contains(&page_number) {
+        return api_error(StatusCode::NOT_FOUND, "reader page not found");
+    }
     let page = match load_stream_feed(
         &state,
         &principal.user.id,
         &principal.user.username,
         &slug,
         "reader",
-        1,
-        20,
+        page_number,
+        READER_STORY_LIMIT,
     )
     .await
     {
@@ -111,6 +121,7 @@ async fn render_login(state: AppState, error: Option<&str>) -> Response {
 async fn reader_stream(
     State(state): State<AppState>,
     Path(slug): Path<String>,
+    Query(query): Query<ReaderPageQuery>,
     headers: HeaderMap,
 ) -> Response {
     let principal = match reader_or_browser_principal(&state, &headers).await {
@@ -118,14 +129,18 @@ async fn reader_stream(
         Err(_) => return Redirect::to("/reader/pair").into_response(),
     };
     let csrf = cookie(&headers, principal_csrf_cookie(&principal)).unwrap_or_default();
+    let page_number = query.page.unwrap_or(1);
+    if !(1..=5).contains(&page_number) {
+        return api_error(StatusCode::NOT_FOUND, "reader page not found");
+    }
     let page = match load_stream_feed(
         &state,
         &principal.user.id,
         &principal.user.username,
         &slug,
         "reader",
-        1,
-        20,
+        page_number,
+        READER_STORY_LIMIT,
     )
     .await
     {
@@ -146,57 +161,6 @@ async fn reader_stream(
         }
     }
     render_page(state, "reader-feed", RenderMode::Reader, page, &csrf, false).await
-}
-
-async fn reader_page(
-    State(state): State<AppState>,
-    Path(page): Path<u32>,
-    headers: HeaderMap,
-) -> Response {
-    if page == 0 || page > 5 {
-        return api_error(StatusCode::NOT_FOUND, "reader page not found");
-    }
-    let principal = match reader_or_browser_principal(&state, &headers).await {
-        Ok(principal) => principal,
-        Err(_) => return Redirect::to("/reader/pair").into_response(),
-    };
-    let slug = if principal.kind == SessionKind::Reader {
-        let auth = state.auth.clone();
-        let user_id = principal.user.id.clone();
-        let session_id = principal.session_id.clone();
-        tokio::task::spawn_blocking(move || auth.reader_selected_stream(&user_id, &session_id))
-            .await
-            .ok()
-            .and_then(Result::ok)
-            .flatten()
-            .unwrap_or_else(|| "home".to_owned())
-    } else {
-        "home".to_owned()
-    };
-    let csrf = cookie(&headers, principal_csrf_cookie(&principal)).unwrap_or_default();
-    let page_model = match load_stream_feed(
-        &state,
-        &principal.user.id,
-        &principal.user.username,
-        &slug,
-        "reader",
-        page,
-        20,
-    )
-    .await
-    {
-        Ok(page) => page,
-        Err(response) => return response,
-    };
-    render_page(
-        state,
-        "reader-feed",
-        RenderMode::Reader,
-        page_model,
-        &csrf,
-        false,
-    )
-    .await
 }
 
 async fn reader_story(
@@ -221,9 +185,14 @@ async fn render_story_page(
 ) -> Response {
     let intelligence = state.intelligence.clone();
     let user_id = principal.user.id;
-    let detail =
-        tokio::task::spawn_blocking(move || intelligence.story_detail(&user_id, &story_id)).await;
-    let detail = match detail {
+    let username = principal.user.username;
+    let detail = tokio::task::spawn_blocking(move || {
+        let detail = intelligence.story_detail(&user_id, &story_id)?;
+        let preferences = intelligence.user_preferences(&user_id)?;
+        Ok::<_, IntelligenceError>((detail, preferences))
+    })
+    .await;
+    let (detail, preferences) = match detail {
         Ok(Ok(detail)) => detail,
         Ok(Err(error)) => return intelligence_error(error),
         Err(failure) => {
@@ -245,7 +214,7 @@ async fn render_story_page(
         state,
         template,
         mode,
-        story_page_model(detail, reader),
+        story_page_model(detail, username, preferences.font_family, reader),
         csrf,
         !reader,
     )

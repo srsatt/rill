@@ -151,7 +151,6 @@ impl IngestionService {
         limit: usize,
     ) -> Result<Vec<SearchHit>, IngestionError> {
         let fts_query = safe_fts_query(query)?;
-        let private_scope = format!("user:{user_id}");
         let sql_limit = i64::try_from(limit.min(100)).unwrap_or(100);
         let connection = self.pool.connection()?;
         let mut statement = connection.prepare(
@@ -161,12 +160,12 @@ impl IngestionService {
              FROM documents_fts\n\
              JOIN documents d ON d.id = documents_fts.document_id\n\
              JOIN story_memberships sm ON sm.document_id = d.id\n\
-             WHERE documents_fts MATCH ?1 AND (d.visibility_scope = ?2 OR EXISTS (\n\
+             WHERE documents_fts MATCH ?1 AND EXISTS (\n\
                SELECT 1 FROM document_access da WHERE da.document_id=d.id\n\
-                 AND (da.user_id IS NULL OR da.user_id=?3)))\n\
-             ORDER BY bm25(documents_fts), coalesce(d.published_at, d.created_at) DESC LIMIT ?4",
+                 AND (da.user_id IS NULL OR da.user_id=?2))\n\
+             ORDER BY bm25(documents_fts), coalesce(d.published_at, d.created_at) DESC LIMIT ?3",
         )?;
-        let rows = statement.query_map(params![fts_query, private_scope, user_id, sql_limit], |row| {
+        let rows = statement.query_map(params![fts_query, user_id, sql_limit], |row| {
             Ok(SearchHit {
                 story_id: row.get(0)?,
                 document_id: row.get(1)?,
@@ -185,19 +184,18 @@ impl IngestionService {
         user_id: &str,
         limit: usize,
     ) -> Result<Vec<SearchHit>, IngestionError> {
-        let private_scope = format!("user:{user_id}");
         let sql_limit = i64::try_from(limit.min(100)).unwrap_or(100);
         let connection = self.pool.connection()?;
         let mut statement = connection.prepare(
             "SELECT sm.story_id, d.id, d.title, substr(d.body_text, 1, 500), d.canonical_url,\n\
              d.publisher, d.published_at FROM documents d\n\
              JOIN story_memberships sm ON sm.document_id = d.id\n\
-             WHERE d.visibility_scope = ?1 OR EXISTS (\n\
+             WHERE EXISTS (\n\
                SELECT 1 FROM document_access da WHERE da.document_id=d.id\n\
-                 AND (da.user_id IS NULL OR da.user_id=?2))\n\
-             ORDER BY coalesce(d.published_at, d.created_at) DESC, d.id LIMIT ?3",
+                 AND (da.user_id IS NULL OR da.user_id=?1))\n\
+             ORDER BY coalesce(d.published_at, d.created_at) DESC, d.id LIMIT ?2",
         )?;
-        let rows = statement.query_map(params![private_scope, user_id, sql_limit], |row| {
+        let rows = statement.query_map(params![user_id, sql_limit], |row| {
             Ok(SearchHit {
                 story_id: row.get(0)?,
                 document_id: row.get(1)?,

@@ -19,7 +19,9 @@ use uuid::Uuid;
 
 pub use preference::PreferenceRefitPayload;
 pub use stories::{CuratorPathView, StoryDetailView, StoryLinkView, StoryVariantView};
-pub use streams::{CreateStreamInput, RankedStory, StreamFilter, StreamView, UpdateStreamInput};
+pub use streams::{
+    CreateStreamInput, RankedStory, StreamFilter, StreamView, UpdateStreamInput, UserPreferences,
+};
 
 #[derive(Debug, Error)]
 pub enum IntelligenceError {

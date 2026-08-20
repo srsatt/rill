@@ -1,12 +1,12 @@
 import type { JSX } from "solid-js";
 import type { StreamLink } from "../../generated/render-contract";
-import { badge } from "../server/solid-ui";
 
 interface ModernShellProps {
   username?: string;
   activeHref: string;
   streams?: StreamLink[];
   activeStream?: string;
+  fontFamily?: string;
   children: JSX.Element;
   detail?: JSX.Element;
 }
@@ -32,12 +32,11 @@ export function ModernShell(props: ModernShellProps) {
     mobileLinks.push(<a href={link.href}>{link.label}</a>);
   }
   return (
-    <div class={`modern-app${props.detail ? " has-detail" : ""}`}>
+    <div class={`modern-app reading-font-${props.fontFamily === "serif" ? "serif" : "sans"}${props.detail ? " has-detail" : ""}`}>
       <a class="skip-link" href="#main-content">Skip to main content</a>
       <aside class="app-sidebar" aria-label="Rill navigation">
         <div class="sidebar-brand">
           <a class="wordmark" href="/stream/home">Rill</a>
-          {badge("Inbox", "secondary")}
         </div>
         <nav class="sidebar-nav" aria-label="Main navigation">
           <ul>
@@ -65,7 +64,7 @@ export function ModernShell(props: ModernShellProps) {
           <div data-account-enhancement data-username={username()} />
           <div class="account-fallback" data-enhancement-fallback>
             <span class="account-avatar" aria-hidden="true">{username().slice(0, 1).toUpperCase()}</span>
-            <span><strong>{username()}</strong><small>Account menu</small></span>
+            <strong>{username()}</strong>
           </div>
         </div>
       </aside>

@@ -109,9 +109,9 @@ The existing action lifecycle is correct, but its fixed event body cannot call K
 1. Add an optional structured JSON body template to HTTP actions. Resolve only a small documented set of scalar values, including story ID, title, summary, canonical URL, source, curator, publication time, related links, and event ID.
 2. Preserve the current event JSON as the default when no template is configured, so existing actions remain compatible.
 3. Reject unknown placeholders, non-JSON output, oversized templates/output, unsafe target URLs, and excessive response bodies before dispatch.
-4. Keep headers encrypted at rest. Add a generic setup path that reads a named header value from an environment variable in-process and stores it through the existing secret store; the secret value must never appear in command arguments, browser state, logs, or reports.
+4. Keep headers encrypted at rest. Accept the per-user header value as a password field and store it immediately through the existing secret store; never return it in browser state, logs, or reports.
 5. Add an optional advanced body-template field to action settings, while keeping the default UI simple.
-6. Configure the PoC action from `.env` after the user supplies `KARAKEEP_API_TOKEN`. A Karakeep-compatible body is conceptually:
+6. Configure the PoC action with the user's private token through the Action settings form. A Karakeep-compatible body is conceptually:
 
    ```json
    {

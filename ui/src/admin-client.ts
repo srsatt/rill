@@ -1,24 +1,3 @@
-interface PluginPermission {
-  capability: string;
-  constraint: unknown;
-}
-
-interface PluginView {
-  installationId: string;
-  metadata: {
-    name: string;
-    version: string;
-    description: string;
-    requestedPermissions: string[];
-  };
-  componentSha256: string;
-  configSchema: unknown;
-  enabled: boolean;
-  grantedPermissions: PluginPermission[];
-  consecutiveFailures: number;
-  lastErrorMessage: string | null;
-}
-
 interface UserView {
   id: string; username: string; email: string | null; role: "admin" | "user"; disabled: boolean;
   createdAt: number; activeBrowserSessions: number; activeReaderDevices: number;
@@ -85,91 +64,34 @@ function report(message: string): void {
   error.hidden = message.length === 0;
 }
 
+function wireTabs(tabs: HTMLButtonElement[], panels: HTMLElement[], valueOf: (element: HTMLElement) => string | undefined): void {
+  if (tabs.length === 0 || tabs.length !== panels.length) return;
+  const select = (tab: HTMLButtonElement, focus: boolean) => {
+    const value = valueOf(tab);
+    tabs.forEach((item) => {
+      const selected = item === tab;
+      item.setAttribute("aria-selected", String(selected));
+      item.tabIndex = selected ? 0 : -1;
+    });
+    panels.forEach((panel) => { panel.hidden = valueOf(panel) !== value; });
+    if (focus) tab.focus();
+  };
+  tabs.forEach((tab, index) => {
+    tab.addEventListener("click", () => select(tab, false));
+    tab.addEventListener("keydown", (event) => {
+      const target = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
+        : event.key === "ArrowRight" ? (index + 1) % tabs.length
+          : event.key === "ArrowLeft" ? (index - 1 + tabs.length) % tabs.length : -1;
+      if (target < 0) return;
+      event.preventDefault(); select(tabs[target], true);
+    });
+  });
+}
+
 async function mutate(path: string, init: RequestInit, message: string): Promise<boolean> {
   const response = await api(path, init);
   if (!response.ok) report(message);
   return response.ok;
-}
-
-function labeledInput(label: string, name: string, placeholder: string): HTMLLabelElement {
-  const wrapper = node("label", label);
-  const input = node("input");
-  input.name = name;
-  input.placeholder = placeholder;
-  input.required = true;
-  wrapper.append(input);
-  return wrapper;
-}
-
-function pluginCard(plugin: PluginView, reload: () => Promise<void>): HTMLElement {
-  const card = node("article");
-  card.className = "admin-card";
-  card.append(
-    node("h3", `${plugin.metadata.name} ${plugin.metadata.version}`),
-    node("p", plugin.metadata.description),
-    node("p", `Component SHA-256: ${plugin.componentSha256}`),
-    node("p", `Requested permissions: ${plugin.metadata.requestedPermissions.join(", ") || "none"}`),
-    node("p", `Granted permissions: ${plugin.grantedPermissions.map((item) => item.capability).join(", ") || "none"}`),
-    node("p", `Health: ${plugin.consecutiveFailures} failures${plugin.lastErrorMessage ? ` · ${plugin.lastErrorMessage}` : ""}`),
-    node("pre", JSON.stringify(plugin.configSchema, null, 2)),
-  );
-  const toggle = node("button", plugin.enabled ? "Disable" : "Enable");
-  toggle.type = "button";
-  toggle.addEventListener("click", async () => {
-    if (await mutate(`/api/v1/plugins/${plugin.installationId}/enabled`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ enabled: !plugin.enabled }),
-    }, "Plugin state could not be changed.")) await reload();
-  });
-  const remove = node("button", "Remove");
-  remove.type = "button";
-  remove.addEventListener("click", async () => {
-    if (await mutate(`/api/v1/plugins/${plugin.installationId}`, { method: "DELETE" },
-      "Plugin could not be removed; remove its source instances first.")) await reload();
-  });
-  card.append(toggle, remove);
-
-  const permission = node("form");
-  permission.className = "admin-form compact";
-  permission.append(
-    labeledInput("Capability", "capability", "http or secret:name"),
-    labeledInput("Constraint JSON", "constraint", '{"hosts":["api.example.com"]}'),
-    node("button", "Grant permission"),
-  );
-  permission.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const data = new FormData(permission);
-    let constraint: unknown;
-    try { constraint = JSON.parse(String(data.get("constraint"))); }
-    catch { report("Permission constraint must be JSON."); return; }
-    if (await mutate(`/api/v1/plugins/${plugin.installationId}/permissions`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ capability: data.get("capability"), constraint }),
-    }, "Permission could not be granted.")) await reload();
-  });
-  card.append(permission);
-
-  const source = node("form");
-  source.className = "admin-form compact";
-  const sourceConfig = labeledInput("Configuration JSON", "config", "{}");
-  source.append(
-    labeledInput("Source name", "name", "My plugin source"),
-    sourceConfig,
-    node("button", "Create private source"),
-  );
-  source.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const data = new FormData(source);
-    let config: unknown;
-    try { config = JSON.parse(String(data.get("config"))); }
-    catch { report("Source configuration must be JSON."); return; }
-    if (await mutate(`/api/v1/plugins/${plugin.installationId}/sources`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: data.get("name"), config, pollIntervalSeconds: 900, shared: false }),
-    }, "Plugin source could not be configured.")) await reload();
-  });
-  card.append(source);
-  return card;
 }
 
 function userCard(user: UserView, reload: () => Promise<void>): HTMLElement {
@@ -206,21 +128,20 @@ function sourceCard(source: SourceView): HTMLElement {
   const health = source.lastErrorMessage
     ? `${source.consecutiveFailures} failures · ${source.lastErrorMessage}`
     : source.lastSuccessAt ? `Last success ${new Date(source.lastSuccessAt * 1000).toLocaleString()}` : "Never fetched";
-  card.append(node("h3", source.name), node("p", `${source.kind} · ${source.visibility} · ${source.enabled ? "enabled" : "disabled"}`), node("p", health));
+  const status = node("span", !source.enabled ? "Disabled" : source.lastErrorMessage ? "Failing" : source.lastSuccessAt ? "Healthy" : "Never fetched");
+  status.className = `status-tag ${!source.enabled ? "status-muted" : source.lastErrorMessage ? "status-error" : source.lastSuccessAt ? "status-success" : "status-warning"}`;
+  const heading = node("div"); heading.className = "admin-card-heading"; heading.append(node("h3", source.name), status);
+  card.append(heading, node("p", `${source.kind} · ${source.visibility}`), node("p", health));
   return card;
 }
 
 function modelSettingCard(setting: ModelSettingView, reload: () => Promise<void>): HTMLElement {
   const title = setting.slot === "ranking" ? "Ranking model" : setting.slot === "embedding" ? "Embedding model" : "Text parsing model";
   const card = node("article");
-  card.className = `admin-card model-setting-card${setting.slot === "ranking" ? " ranking-model-card" : ""}`;
+  card.className = "admin-card model-setting-card";
   const heading = node("h3", title);
   const status = node("p", `${setting.mode} · ${setting.provider}/${setting.model} · ${setting.version}${setting.apiKeyConfigured ? " · API key stored" : " · no API key"}`);
-  if (setting.slot === "ranking") {
-    card.append(heading, node("p", "Orders each stream using its ranking instruction, source signals, and explicit user feedback."), status);
-  } else {
-    card.append(heading, status);
-  }
+  card.append(heading, status);
 
   const form = node("form");
   form.className = "admin-form compact model-setting-form";
@@ -238,12 +159,45 @@ function modelSettingCard(setting: ModelSettingView, reload: () => Promise<void>
     label.append(input);
     return label;
   };
+  const presets = {
+    openai: ["openai", "https://api.openai.com/v1/"],
+    claude: ["claude", "https://api.anthropic.com/v1/"],
+    gemini: ["gemini", "https://generativelanguage.googleapis.com/v1beta/openai/"],
+    ollama: ["ollama", "http://127.0.0.1:11434/v1/"],
+    custom: ["openai-compatible", setting.baseUrl ?? ""],
+  } as const;
+  const activePreset = Object.keys(presets).find((key) => presets[key as keyof typeof presets][0] === setting.provider) as keyof typeof presets | undefined;
+  const presetLabel = node("label", "Provider preset");
+  const preset = node("select"); preset.name = "preset";
+  for (const [value, label] of [["openai", "OpenAI"], ["claude", "Claude"], ["gemini", "Gemini"], ["ollama", "Ollama"], ["custom", "Custom OpenAI-compatible"]]) {
+    const option = node("option", label); option.value = value; preset.append(option);
+  }
+  preset.value = activePreset ?? "custom";
+  presetLabel.append(preset);
+  const baseUrl = field("Base URL", "baseUrl", setting.baseUrl ?? presets[activePreset ?? "custom"][1], "url");
+  const provider = field("Provider identifier", "provider", setting.provider);
+  const model = field("Model", "model", setting.model);
+  const defaults = {
+    embedding: { openai: "text-embedding-3-small", claude: "voyage-3", gemini: "text-embedding-004", ollama: "nomic-embed-text" },
+    ranking: { openai: "gpt-4.1-mini", claude: "claude-sonnet-4-5", gemini: "gemini-2.5-flash", ollama: "qwen3" },
+    text_parse: { openai: "gpt-4.1-mini", claude: "claude-sonnet-4-5", gemini: "gemini-2.5-flash", ollama: "qwen3" },
+  } as const;
+  preset.addEventListener("change", () => {
+    const choice = preset.value as keyof typeof presets;
+    const providerInput = provider.querySelector("input");
+    const baseInput = baseUrl.querySelector("input");
+    const modelInput = model.querySelector("input");
+    if (providerInput) providerInput.value = presets[choice][0];
+    if (baseInput) baseInput.value = presets[choice][1];
+    if (modelInput && choice !== "custom") modelInput.value = defaults[setting.slot][choice];
+  });
   form.append(
-    field("Base URL", "baseUrl", setting.baseUrl ?? "", "url"),
-    field("Provider", "provider", setting.provider),
-    field("Model", "model", setting.model),
+    presetLabel,
+    baseUrl,
+    provider,
+    model,
     field("Version", "version", setting.version),
-    field("API key", "apiKey", "", "password"),
+    field("API token", "apiKey", "", "password"),
   );
   const clearLabel = node("label");
   clearLabel.className = "checkbox-label";
@@ -252,36 +206,66 @@ function modelSettingCard(setting: ModelSettingView, reload: () => Promise<void>
   clear.name = "clearApiKey";
   clear.disabled = !setting.apiKeyConfigured;
   clearLabel.append(clear, " Remove the stored API key");
+  const formBody = () => {
+    const data = new FormData(form);
+    const body: Record<string, unknown> = {
+      baseUrl: data.get("baseUrl"), provider: data.get("provider"), model: data.get("model"),
+      version: data.get("version"), clearApiKey: data.get("clearApiKey") === "on",
+    };
+    const apiKey = String(data.get("apiKey") ?? "");
+    if (apiKey) body.apiKey = apiKey;
+    return body;
+  };
+  const actions = node("div"); actions.className = "model-form-actions";
+  const test = node("button", "Test model");
+  test.type = "button";
+  const testStatus = node("span"); testStatus.className = "model-test-status"; testStatus.setAttribute("role", "status");
+  test.addEventListener("click", async () => {
+    test.disabled = true; testStatus.textContent = "Testing…";
+    const response = await api(`/api/v1/admin/settings/models/${setting.slot}/test`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(formBody()),
+    });
+    test.disabled = false;
+    if (!response.ok) { testStatus.textContent = "Test failed."; return; }
+    const health = await response.json() as { ready: boolean; detail: string };
+    testStatus.textContent = health.ready ? `Ready · ${health.detail}` : `Unavailable · ${health.detail}`;
+  });
   const save = node("button", `Save ${title.toLowerCase()}`);
   save.type = "submit";
   save.className = "primary-action";
-  form.append(clearLabel, save);
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const data = new FormData(form);
-    const apiKey = String(data.get("apiKey") ?? "");
-    const body: Record<string, unknown> = {
-      baseUrl: data.get("baseUrl"),
-      provider: data.get("provider"),
-      model: data.get("model"),
-      version: data.get("version"),
-      clearApiKey: data.get("clearApiKey") === "on",
-    };
-    if (apiKey) body.apiKey = apiKey;
-    if (await mutate(`/api/v1/admin/settings/models/${setting.slot}`, {
-      method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
-    }, `${title} could not be saved.`)) await reload();
-  });
-  card.append(form);
-
   const reset = node("button", `Reset ${title.toLowerCase()}`);
   reset.type = "button";
   reset.className = "secondary-action";
   reset.addEventListener("click", async () => {
     if (await mutate(`/api/v1/admin/settings/models/${setting.slot}`, { method: "DELETE" }, `${title} could not be reset.`)) await reload();
   });
-  card.append(reset);
+  actions.append(test, save, reset, testStatus);
+  form.append(clearLabel, actions);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (await mutate(`/api/v1/admin/settings/models/${setting.slot}`, {
+      method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(formBody()),
+    }, `${title} could not be saved.`)) await reload();
+  });
+  card.append(form);
   return card;
+}
+
+function modelSettings(models: ModelSettingView[], reload: () => Promise<void>): HTMLElement[] {
+  const labels = { ranking: "Ranking", embedding: "Embedding", text_parse: "Text parsing" } as const;
+  const tabs = node("div"); tabs.className = "settings-tabs model-tabs"; tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Model task");
+  const panels: HTMLElement[] = [];
+  const buttons: HTMLButtonElement[] = [];
+  models.forEach((model, index) => {
+    const button = node("button", labels[model.slot]);
+    button.type = "button"; button.setAttribute("role", "tab"); button.dataset.modelTab = model.slot;
+    button.setAttribute("aria-selected", String(index === 0)); button.tabIndex = index === 0 ? 0 : -1;
+    tabs.append(button); buttons.push(button);
+    const panel = node("section"); panel.setAttribute("role", "tabpanel"); panel.dataset.modelPanel = model.slot; panel.hidden = index !== 0;
+    panel.append(modelSettingCard(model, reload)); panels.push(panel);
+  });
+  wireTabs(buttons, panels, (element) => element.dataset.modelTab ?? element.dataset.modelPanel);
+  return [tabs, ...panels];
 }
 
 function telegramBotSetting(view: TelegramBotView, reload: () => Promise<void>): HTMLElement {
@@ -332,9 +316,16 @@ function telegramBotSetting(view: TelegramBotView, reload: () => Promise<void>):
 function jobCard(job: JobView, reload: () => Promise<void>): HTMLElement {
   const card = node("article");
   card.className = "admin-card";
-  card.append(node("h3", job.kind), node("p", `${job.status} · attempt ${job.attemptCount}/${job.maxAttempts}`));
+  card.append(node("h3", job.kind), node("p", `${job.status} · attempt ${job.attemptCount}/${job.maxAttempts} · ${job.id}`));
   if (job.lastErrorMessage) card.append(node("p", job.lastErrorMessage));
-  if (job.attempts.length) card.append(node("p", `Latest: ${job.attempts[0].outcome ?? "running"}${job.attempts[0].errorMessage ? ` · ${job.attempts[0].errorMessage}` : ""}`));
+  if (job.attempts.length) {
+    const details = node("details"); details.className = "job-attempts"; details.append(node("summary", `${job.attempts.length} recorded attempt${job.attempts.length === 1 ? "" : "s"}`));
+    const list = node("ol");
+    job.attempts.forEach((attempt) => {
+      list.append(node("li", `#${attempt.attemptNumber}: ${attempt.outcome ?? "running"}${attempt.errorMessage ? ` · ${attempt.errorMessage}` : ""}`));
+    });
+    details.append(list); card.append(details);
+  }
   if (job.status === "dead") {
     const retry = node("button", "Retry"); retry.type = "button";
     retry.addEventListener("click", async () => {
@@ -352,9 +343,9 @@ function jobCard(job: JobView, reload: () => Promise<void>): HTMLElement {
 }
 
 export function activateAdmin(): void {
-  const pluginList = document.getElementById("plugin-list");
-  const installForm = document.getElementById("plugin-install");
-  const componentInput = document.getElementById("plugin-component");
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-admin-tab]"));
+  const panels = Array.from(document.querySelectorAll<HTMLElement>("[data-admin-panel]"));
+  wireTabs(tabs, panels, (element) => element.dataset.adminTab ?? element.dataset.adminPanel);
   const userForm = document.getElementById("user-create");
   const userList = document.getElementById("user-list");
   const sourceList = document.getElementById("source-list");
@@ -362,31 +353,27 @@ export function activateAdmin(): void {
   const telegramBot = document.getElementById("telegram-bot-setting");
   const jobList = document.getElementById("job-list");
   const auditList = document.getElementById("audit-list");
-  if (!(pluginList instanceof HTMLDivElement)
-    || !(installForm instanceof HTMLFormElement) || !(componentInput instanceof HTMLInputElement)
-    || !(userForm instanceof HTMLFormElement)
+  if (!(userForm instanceof HTMLFormElement)
     || !(userList instanceof HTMLDivElement) || !(sourceList instanceof HTMLDivElement)
     || !(modelList instanceof HTMLDivElement) || !(telegramBot instanceof HTMLDivElement) || !(jobList instanceof HTMLDivElement)
     || !(auditList instanceof HTMLDivElement)) return;
 
   const reload = async () => {
-    const [pluginResponse, userResponse, sourceResponse, modelResponse, telegramBotResponse, jobResponse, auditResponse] = await Promise.all([
-      api("/api/v1/plugins"), api("/api/v1/admin/users"), api("/api/v1/sources"),
+    const [userResponse, sourceResponse, modelResponse, telegramBotResponse, jobResponse, auditResponse] = await Promise.all([
+      api("/api/v1/admin/users"), api("/api/v1/sources"),
       api("/api/v1/admin/models"), api("/api/v1/admin/settings/telegram-bot"), api("/api/v1/admin/jobs?limit=50"), api("/api/v1/admin/audit?limit=100"),
     ]);
-    if ([pluginResponse, userResponse, sourceResponse, modelResponse, telegramBotResponse, jobResponse, auditResponse].some((response) => !response.ok)) { report("Administration data could not be loaded."); return; }
-    const plugins = await pluginResponse.json() as PluginView[];
+    if ([userResponse, sourceResponse, modelResponse, telegramBotResponse, jobResponse, auditResponse].some((response) => !response.ok)) { report("Administration data could not be loaded."); return; }
     const users = await userResponse.json() as UserView[];
     const sources = await sourceResponse.json() as SourceView[];
     const models = await modelResponse.json() as ModelSettingView[];
     const telegramBotView = await telegramBotResponse.json() as TelegramBotView;
     const jobs = await jobResponse.json() as JobView[];
     const audit = await auditResponse.json() as AuditView[];
-    pluginList.replaceChildren(...(plugins.length ? plugins.map((plugin) => pluginCard(plugin, reload)) : [node("p", "No plugins installed.")]));
     userList.replaceChildren(...users.map((user) => userCard(user, reload)));
     sourceList.replaceChildren(...(sources.length ? sources.map(sourceCard) : [node("p", "No sources configured.")]));
     const modelOrder = { ranking: 0, embedding: 1, text_parse: 2 } as const;
-    modelList.replaceChildren(...models.sort((left, right) => modelOrder[left.slot] - modelOrder[right.slot]).map((model) => modelSettingCard(model, reload)));
+    modelList.replaceChildren(...modelSettings(models.sort((left, right) => modelOrder[left.slot] - modelOrder[right.slot]), reload));
     telegramBot.replaceChildren(telegramBotSetting(telegramBotView, reload));
     jobList.replaceChildren(...(jobs.length ? jobs.map((job) => jobCard(job, reload)) : [node("p", "No jobs.")]));
     auditList.replaceChildren(...audit.map((event) => {
@@ -404,14 +391,6 @@ export function activateAdmin(): void {
       body: JSON.stringify({ username: data.get("username"), email: data.get("email") || null,
         password: data.get("password"), role: data.get("role") }),
     }, "User could not be created.")) { userForm.reset(); await reload(); }
-  });
-
-  installForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const file = componentInput.files?.[0];
-    if (!file) return;
-    if (await mutate("/api/v1/plugins/install", { method: "POST", headers: { "content-type": "application/wasm" }, body: file },
-      "Component installation failed.")) await reload();
   });
 
   void reload();

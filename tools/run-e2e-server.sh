@@ -17,8 +17,13 @@ export RILL_PUBLIC_BASE_URL="http://127.0.0.1:$e2e_port"
 export RILL_STATIC_DIR="$project_root/ui/dist/client"
 export RILL_RENDERER_WASM="$project_root/artifacts/ui-renderer.wasm"
 export RILL_ADMIN_PASSWORD="rill-e2e-password"
+export RILL_MASTER_KEY="CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk"
 
-cargo run -p rill -- --config config/development.toml admin create --username admin
+if [ -n "${RILL_E2E_DATABASE_SNAPSHOT:-}" ]; then
+  cp "$RILL_E2E_DATABASE_SNAPSHOT" "$test_database"
+else
+  cargo run -p rill -- --config config/development.toml admin create --username admin
+fi
 RILL_FIXTURE_PORT="$fixture_port" node tools/fixture-server.mjs &
 fixture_pid=$!
 trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT INT TERM

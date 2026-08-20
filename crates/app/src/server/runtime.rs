@@ -30,10 +30,18 @@ async fn render_page(
     match tokio::task::spawn_blocking(move || renderer.render(&request)).await {
         Ok(Ok(rendered)) => {
             metrics.observe("renderer", started.elapsed(), true, 1);
+            let assets = if state.dev_reload {
+                load_assets(&state.static_dir).unwrap_or_else(|failure| {
+                    warn!(error = %failure, "asset manifest reload failed");
+                    state.assets.clone()
+                })
+            } else {
+                state.assets.clone()
+            };
             document_response(
                 rendered,
                 &render_id,
-                &state.assets,
+                &assets,
                 hydrate,
                 state.dev_reload,
             )

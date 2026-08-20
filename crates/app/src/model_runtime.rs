@@ -116,6 +116,15 @@ impl RuntimeModelRegistry {
         }
         Ok(())
     }
+
+    pub async fn health(&self, slot: &str) -> Result<ModelHealth, ModelError> {
+        match slot {
+            "embedding" => self.embedding.health().await,
+            "ranking" => self.ranking.health().await,
+            "text_parse" => self.summary.health().await,
+            _ => Err(ModelError::Unavailable("unknown model slot".into())),
+        }
+    }
 }
 
 fn recommendation_provider(
@@ -125,7 +134,7 @@ fn recommendation_provider(
     let config = http_model_config(settings, api_key)?;
     if matches!(
         settings.provider.to_ascii_lowercase().as_str(),
-        "ollama" | "openai" | "openai-compatible"
+        "ollama" | "openai" | "openai-compatible" | "claude" | "gemini"
     ) {
         Ok(Arc::new(OpenAiCompatibleRecommendationProvider::new(
             config,

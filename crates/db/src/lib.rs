@@ -54,6 +54,18 @@ const MIGRATIONS: &[(i64, &str)] = &[
         13,
         include_str!("../../../migrations/0013_document_links.sql"),
     ),
+    (
+        14,
+        include_str!("../../../migrations/0014_user_preferences_and_cluster_repair.sql"),
+    ),
+    (
+        15,
+        include_str!("../../../migrations/0015_typography_and_stream_order.sql"),
+    ),
+    (
+        16,
+        include_str!("../../../migrations/0016_source_processing.sql"),
+    ),
 ];
 
 #[derive(Debug, Error)]
@@ -345,5 +357,48 @@ mod tests {
             })
             .unwrap();
         assert_eq!(globally_visible, 0);
+    }
+
+    #[test]
+    fn excluded_source_document_is_not_accessible() {
+        let pool = DbPool::open_in_memory().unwrap();
+        pool.with_connection(|connection| {
+            connection.execute_batch(
+                "INSERT INTO users(id, username, role) VALUES ('alice', 'alice', 'user');
+                 INSERT INTO source_instances(
+                   id, definition_id, owner_user_id, name, visibility, visibility_scope, audience
+                 ) VALUES ('feed', 'builtin:telegram', 'alice', 'Feed', 'private', 'user:alice', 'owner');
+                 INSERT INTO source_subscriptions(user_id, source_instance_id) VALUES ('alice', 'feed');
+                 INSERT INTO documents(id, visibility_scope, exact_content_hash, title, body_text)
+                   VALUES ('document', 'user:alice', x'01', 'Title', 'Body'),
+                          ('direct', 'user:alice', x'02', 'Direct', 'Body');
+                 INSERT INTO document_curators(
+                   document_id, curator_kind, curator_id, source_instance_id, included
+                 ) VALUES ('document', 'source', 'feed', 'feed', 0);",
+            )
+        })
+        .unwrap();
+
+        let visible: i64 = pool
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT count(*) FROM document_access WHERE document_id='document'",
+                    [],
+                    |row| row.get(0),
+                )
+            })
+            .unwrap();
+        assert_eq!(visible, 0);
+        let direct_visible: i64 = pool
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT count(*) FROM document_access
+                     WHERE document_id='direct' AND user_id='alice'",
+                    [],
+                    |row| row.get(0),
+                )
+            })
+            .unwrap();
+        assert_eq!(direct_visible, 1);
     }
 }

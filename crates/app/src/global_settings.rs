@@ -255,6 +255,34 @@ impl GlobalSettingsService {
         Ok(())
     }
 
+    pub fn test_model(
+        &self,
+        slot: &str,
+        input: &ModelSettingInput,
+        api_key: Option<&str>,
+    ) -> Result<RuntimeModelRegistry> {
+        validate_slot(slot)?;
+        let settings = StoredModelConfig::from_input(input)?.as_http_settings();
+        let retained_key = if input.clear_api_key {
+            None
+        } else if api_key.is_some_and(|value| !value.is_empty()) {
+            api_key.map(str::to_owned)
+        } else {
+            match self.load_model(slot)? {
+                Some((_, secret_id)) => self.read_secret(secret_id.as_deref())?,
+                None => None,
+            }
+        };
+        let scratch = RuntimeModelRegistry::from_settings(&rill_config::Settings::default())?;
+        match slot {
+            "embedding" => scratch.set_embedding(Some(&settings), retained_key)?,
+            "ranking" => scratch.set_ranking(Some(&settings), retained_key)?,
+            "text_parse" => scratch.set_text_parse(Some(&settings), retained_key)?,
+            _ => unreachable!(),
+        }
+        Ok(scratch)
+    }
+
     fn load_model(&self, slot: &str) -> Result<Option<(StoredModelConfig, Option<String>)>> {
         let raw: Option<(String, Option<String>)> = self.pool.with_connection(|connection| {
             connection

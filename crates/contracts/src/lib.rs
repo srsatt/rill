@@ -54,6 +54,7 @@ pub struct StoryCardModel {
     pub title: String,
     pub summary: String,
     pub source: String,
+    pub canonical_url: Option<String>,
     pub curator: Option<String>,
     pub published_at: String,
     pub coverage_count: u32,
@@ -69,6 +70,7 @@ pub struct FeedPageModel {
     pub streams: Vec<StreamLink>,
     pub stories: Vec<StoryCardModel>,
     pub username: String,
+    pub font_family: String,
     pub page: u32,
     pub previous_page: Option<u32>,
     pub next_page: Option<u32>,
@@ -133,6 +135,8 @@ pub struct StoryVariantModel {
 #[serde(rename_all = "camelCase")]
 pub struct StoryPageModel {
     pub title: String,
+    pub username: String,
+    pub font_family: String,
     pub story_id: String,
     pub representative: StoryVariantModel,
     pub variants: Vec<StoryVariantModel>,

@@ -35,10 +35,11 @@ async fn load_stream_feed(
             requested,
             &ui_mode_owned,
         )?;
-        Ok::<_, IntelligenceError>((streams, ranked))
+        let preferences = intelligence.user_preferences(&user_id_owned)?;
+        Ok::<_, IntelligenceError>((streams, ranked, preferences))
     })
     .await;
-    let (streams, ranked) = match loaded {
+    let (streams, ranked, preferences) = match loaded {
         Ok(Ok(loaded)) => loaded,
         Ok(Err(error)) => return Err(intelligence_error(error)),
         Err(error) => {
@@ -74,15 +75,23 @@ async fn load_stream_feed(
             .collect(),
         stories: stories.into_iter().map(story_card).collect(),
         username: username.to_owned(),
+        font_family: preferences.font_family,
         page,
         previous_page: (page > 1).then_some(page - 1),
         next_page: has_next.then_some(page + 1),
     })
 }
 
-fn story_page_model(detail: StoryDetailView, reader: bool) -> StoryPageModel {
+fn story_page_model(
+    detail: StoryDetailView,
+    username: String,
+    font_family: String,
+    reader: bool,
+) -> StoryPageModel {
     StoryPageModel {
         title: detail.representative.title.clone(),
+        username,
+        font_family,
         story_id: detail.story_id,
         representative: story_variant_model(detail.representative),
         variants: detail
@@ -141,16 +150,17 @@ fn story_card(hit: RankedStory) -> StoryCardModel {
     let word_count = hit.summary.split_whitespace().count();
     StoryCardModel {
         id: hit.story_id,
-        title: bounded_card_text(&hit.title, 240),
+        title: hit.title,
         summary: if hit.summary.trim().is_empty() {
             "No summary available.".to_owned()
         } else {
-            bounded_card_text(&hit.summary, 800)
+            hit.summary
         },
         source: hit
             .publisher
             .map(|publisher| bounded_card_text(&publisher, 120))
             .unwrap_or_else(|| "Unknown publisher".to_owned()),
+        canonical_url: hit.canonical_url,
         curator: None,
         published_at: hit
             .published_at
@@ -174,7 +184,31 @@ fn bounded_card_text(value: &str, maximum_chars: usize) -> String {
 
 #[cfg(test)]
 mod view_model_tests {
-    use super::bounded_card_text;
+    use super::{bounded_card_text, story_card};
+    use rill_intelligence::RankedStory;
+    use serde_json::json;
+
+    #[test]
+    fn story_card_preserves_full_title_and_summary() {
+        let title = "title ".repeat(80);
+        let summary = "summary ".repeat(250);
+        let card = story_card(RankedStory {
+            story_id: "story-1".into(),
+            document_id: "document-1".into(),
+            title: title.clone(),
+            summary: summary.clone(),
+            canonical_url: None,
+            publisher: Some("Publisher".into()),
+            published_at: None,
+            coverage: 1,
+            topics: Vec::new(),
+            score: 0.0,
+            explanation: json!({}),
+        });
+
+        assert_eq!(card.title, title);
+        assert_eq!(card.summary, summary);
+    }
 
     #[test]
     fn card_text_is_bounded_at_unicode_character_boundaries() {

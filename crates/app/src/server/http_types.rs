@@ -81,9 +81,16 @@ struct LibraryQuery {
     topic: Option<String>,
 }
 
+#[derive(Deserialize, Default)]
+struct ReaderPageQuery {
+    page: Option<u32>,
+}
+
 #[derive(Deserialize)]
 struct LimitQuery {
     limit: Option<usize>,
+    #[serde(default)]
+    offset: usize,
 }
 
 #[derive(Deserialize, Default)]
@@ -95,6 +102,11 @@ struct SharedQuery {
 #[derive(Deserialize)]
 struct SourceEnabledRequest {
     enabled: bool,
+}
+
+#[derive(Deserialize)]
+struct SourceProcessingPromptRequest {
+    prompt: String,
 }
 
 #[derive(Deserialize)]
@@ -196,6 +208,13 @@ struct QuickAddSourceResponse {
 #[serde(rename_all = "camelCase")]
 struct EventResponse {
     event_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StreamFeedResponse {
+    stories: Vec<StoryCardModel>,
+    has_more: bool,
 }
 
 #[derive(Deserialize)]

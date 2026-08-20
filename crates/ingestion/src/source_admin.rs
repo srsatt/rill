@@ -45,6 +45,8 @@ impl IngestionService {
         let mut statement = connection.prepare(
             "SELECT si.id, sd.kind, si.name, si.visibility, si.audience,
              CASE WHEN si.audience='subscribers' THEN coalesce(ss.enabled, 0) ELSE si.enabled END,
+             (?2 = 1 OR si.owner_user_id = ?1),
+             si.processing_prompt,
              sh.last_success_at,\n\
              coalesce(sh.consecutive_failures, 0), sh.last_error_message\n\
              FROM source_instances si JOIN source_definitions sd ON sd.id = si.definition_id\n\
@@ -61,12 +63,76 @@ impl IngestionService {
                 visibility: row.get(3)?,
                 audience: row.get(4)?,
                 enabled: row.get::<_, i64>(5)? != 0,
-                last_success_at: row.get(6)?,
-                consecutive_failures: row.get(7)?,
-                last_error_message: row.get(8)?,
+                editable: row.get::<_, i64>(6)? != 0,
+                processing_prompt: row.get(7)?,
+                last_success_at: row.get(8)?,
+                consecutive_failures: row.get(9)?,
+                last_error_message: row.get(10)?,
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn set_source_processing_prompt(
+        &self,
+        source_id: &str,
+        user_id: &str,
+        is_admin: bool,
+        prompt: &str,
+    ) -> Result<(), IngestionError> {
+        let prompt = prompt.trim();
+        if prompt.chars().count() > 4_000 {
+            return Err(IngestionError::Invalid(
+                "source processing instructions are too long".into(),
+            ));
+        }
+        let mut connection = self.pool.connection()?;
+        let transaction = connection.transaction()?;
+        let editable: Option<i64> = transaction
+            .query_row(
+                "SELECT 1 FROM source_instances
+                 WHERE id=?1 AND (?3 OR owner_user_id=?2)",
+                params![source_id, user_id, is_admin],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if editable.is_none() {
+            return Err(IngestionError::Invalid("source is not editable".into()));
+        }
+        transaction.execute(
+            "UPDATE source_instances SET processing_prompt=?2, updated_at=unixepoch() WHERE id=?1",
+            params![source_id, prompt],
+        )?;
+        if prompt.is_empty() {
+            transaction.execute(
+                "UPDATE document_curators SET included=1 WHERE source_instance_id=?1",
+                [source_id],
+            )?;
+        }
+        let documents = {
+            let mut statement = transaction.prepare(
+                "SELECT DISTINCT document_id FROM document_curators WHERE source_instance_id=?1",
+            )?;
+            statement
+                .query_map([source_id], |row| row.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        transaction.commit()?;
+        drop(connection);
+        let update_id = Uuid::new_v4();
+        for document_id in documents {
+            self.jobs.enqueue(
+                JobKind::GenerateSummary,
+                &json!({ "documentId": document_id }),
+                EnqueueOptions {
+                    idempotency_key: Some(format!(
+                        "GenerateSummary:{document_id}:source-prompt:{update_id}"
+                    )),
+                    ..Default::default()
+                },
+            )?;
+        }
+        Ok(())
     }
 
     pub fn list_rss_feeds(

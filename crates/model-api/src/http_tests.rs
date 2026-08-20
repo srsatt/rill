@@ -166,11 +166,34 @@ mod http_tests {
                 canonical_url: None,
                 language: Some("en".into()),
                 text: "Rust improved this benchmark with a concrete implementation.".into(),
+                custom_instruction: None,
             })
             .await
             .unwrap();
         assert_eq!(output.text, "A concrete result.");
         assert_eq!(output.tags, vec![TopicTag { label: "rust".into(), confidence: 0.93 }]);
+        assert!(output.include);
+    }
+
+    #[tokio::test]
+    async fn summary_returns_source_filter_decision() {
+        let content = r#"{"include":false,"summary":"Not relevant.","tags":["technology"]}"#;
+        let body = json!({"choices":[{"message":{"content":content}}]}).to_string();
+        let server = mock_server(vec![(200, body)]).await;
+        let provider = OpenAiCompatibleProvider::new(config(server.url.clone())).unwrap();
+        let output = provider
+            .summarize(SummaryRequest {
+                title: "Product launch".into(),
+                source: None,
+                author: None,
+                canonical_url: None,
+                language: Some("en".into()),
+                text: "A product launched today.".into(),
+                custom_instruction: Some("Remove product launches from the feed".into()),
+            })
+            .await
+            .unwrap();
+        assert!(!output.include);
     }
 
     #[tokio::test]

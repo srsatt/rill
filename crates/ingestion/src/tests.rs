@@ -70,6 +70,79 @@ mod tests {
     }
 
     #[test]
+    fn feed_item_drops_mastodon_javascript_fallback() {
+        let (pool, service, _user_id, source) = setup();
+        let mut item = article("mastodon", "https://social.example/@graphene/1", "GrapheneOS");
+        item.body_text = Some(
+            "GrapheneOS is projected for high-end Motorola phones in 2027.\n\n<img alt=\"Mastodon\" src=\"/logo.svg\" /> <div>To use the Mastodon web application, please enable JavaScript. Alternatively, try one of the native apps for Mastodon for your platform.</div>".into(),
+        );
+        item.body_html = Some(
+            "<p>GrapheneOS is projected for high-end Motorola phones in 2027.</p><img alt=\"Mastodon\" src=\"/logo.svg\"><div>To use the Mastodon web application, please enable JavaScript.</div>".into(),
+        );
+        service
+            .ingest_batch(
+                &source.id,
+                &SourceBatch { items: vec![item], cursor: None, not_modified: false },
+            )
+            .unwrap();
+
+        let body: String = pool
+            .with_connection(|connection| {
+                connection.query_row("SELECT body_text FROM documents", [], |row| row.get(0))
+            })
+            .unwrap();
+        assert!(body.contains("Motorola phones"), "{body}");
+        assert!(!body.contains("enable JavaScript"));
+        let html: String = pool
+            .with_connection(|connection| {
+                connection.query_row("SELECT sanitized_html FROM documents", [], |row| row.get(0))
+            })
+            .unwrap();
+        assert!(!html.contains("enable JavaScript"));
+    }
+
+    #[test]
+    fn source_processing_prompt_is_saved_and_requeues_documents() {
+        let (pool, service, user_id, source) = setup();
+        service
+            .ingest_batch(
+                &source.id,
+                &SourceBatch {
+                    items: vec![article("prompted", "https://example.com/prompted", "Prompted")],
+                    cursor: None,
+                    not_modified: false,
+                },
+            )
+            .unwrap();
+
+        service
+            .set_source_processing_prompt(
+                &source.id,
+                &user_id,
+                false,
+                "Translate summaries to German; remove product launches.",
+            )
+            .unwrap();
+
+        let sources = service.list_sources(&user_id, false).unwrap();
+        assert_eq!(
+            sources[0].processing_prompt,
+            "Translate summaries to German; remove product launches."
+        );
+        let requeued: i64 = pool
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT count(*) FROM jobs
+                     WHERE idempotency_key LIKE 'GenerateSummary:%:source-prompt:%'",
+                    [],
+                    |row| row.get(0),
+                )
+            })
+            .unwrap();
+        assert_eq!(requeued, 1);
+    }
+
+    #[test]
     fn deleted_source_item_removes_its_orphaned_story_and_keeps_tombstone() {
         let (pool, service, user_id, source) = setup();
         let original = article("gone", "https://example.com/gone", "Temporary report");

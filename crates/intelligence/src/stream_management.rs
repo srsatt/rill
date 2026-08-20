@@ -55,9 +55,9 @@ impl IntelligenceService {
     }
 
     pub fn delete_stream(&self, user_id: &str, slug: &str) -> Result<(), IntelligenceError> {
-        if slug == "home" {
+        if matches!(slug, "home" | "all") {
             return Err(IntelligenceError::Invalid(
-                "the Home stream cannot be deleted".into(),
+                "built-in streams cannot be deleted".into(),
             ));
         }
         self.pool.with_connection(|connection| {
@@ -104,6 +104,11 @@ impl IntelligenceService {
         if slugs.len() != current.len() || requested.len() != slugs.len() || requested != expected {
             return Err(IntelligenceError::Invalid(
                 "stream order must contain every stream exactly once".into(),
+            ));
+        }
+        if slugs.first().is_none_or(|slug| slug != "all") {
+            return Err(IntelligenceError::Invalid(
+                "the All stream must remain first".into(),
             ));
         }
         self.pool.with_connection(|connection| {

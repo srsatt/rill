@@ -23,14 +23,14 @@ own temporary directory.
 
 | Artifact | Actual value |
 |---|---:|
-| stripped release Rust executable | 27,434,432 bytes |
-| stripped renderer WASM | 656,326 bytes |
-| renderer source after Vite SSR transform | 61,406 bytes |
-| modern initial JavaScript, raw | 48,409 bytes |
-| modern initial JavaScript, gzip -9 | 16,532 bytes |
-| modern initial JavaScript, Brotli quality 11 | 14,795 bytes |
+| stripped release Rust executable | 27,483,392 bytes |
+| stripped renderer WASM | 626,067 bytes |
+| renderer source after Vite SSR transform | 61,243 bytes |
+| modern initial JavaScript, raw | 47,399 bytes |
+| modern initial JavaScript, gzip -9 | 16,181 bytes |
+| modern initial JavaScript, Brotli quality 11 | 14,454 bytes |
 | reader JavaScript artifact | none; 0 bytes and no reader script tag |
-| scriptc static coverage | 253/253 statements, 100%; zero dynamic remainder |
+| scriptc static coverage | 241/241 statements, 100%; zero dynamic remainder |
 
 Lazy Sources, Reader Settings, and Admin chunks are excluded from the modern
 initial-bundle value. Reader functionality requires zero JavaScript.
@@ -39,20 +39,20 @@ initial-bundle value. Reader functionality requires zero JavaScript.
 
 | Runtime state | Actual value |
 |---|---:|
-| cold process start through `/health/ready` | 142.0 ms |
-| idle service RSS after readiness | 199,786,496 bytes (190.53 MiB) |
-| maximum service RSS across 100 sequential Solid SSR renders | 200,933,376 bytes (191.63 MiB) |
-| maximum service RSS during normal RSS fixture ingestion | 204,832,768 bytes (195.34 MiB) |
-| maximum service RSS during 25-link collection expansion | 204,832,768 bytes (195.34 MiB) |
-| maximum sampled macOS physical footprint | 79,971,024 bytes (76.27 MiB) |
-| peak macOS physical footprint since process start | 205,685,384 bytes (196.16 MiB) |
-| SQLite database after both fixture imports and graceful stop | 778,240 bytes |
+| cold process start through `/health/ready` | 83.3 ms |
+| idle service RSS after readiness | 204,259,328 bytes (194.80 MiB) |
+| maximum service RSS across 100 sequential Solid SSR renders | 205,471,744 bytes (195.95 MiB) |
+| maximum service RSS during normal RSS fixture ingestion | 208,994,304 bytes (199.31 MiB) |
+| maximum service RSS during 25-link collection expansion | 209,158,144 bytes (199.47 MiB) |
+| maximum sampled macOS physical footprint | 87,376,592 bytes (83.33 MiB) |
+| peak macOS physical footprint since process start | 205,832,864 bytes (196.30 MiB) |
+| SQLite database after both fixture imports and graceful stop | 946,176 bytes |
 
 RSS is sampled from `ps` every 20 ms, so values are observed maxima, not a
 proof that no shorter transient peak occurred. On macOS, RSS includes clean and
 shared file-backed pages; `footprint` better represents process-owned memory
-pressure. RSS varied from 190.53 MiB to 215.00 MiB across otherwise identical
-runs while settled physical footprint stayed between about 76 and 96 MiB. A
+pressure. RSS varied from about 190 to 216 MiB across otherwise identical
+runs while settled physical footprint stayed between about 76 and 99 MiB. A
 manual post-start inspection found a 15.0 MiB live heap. The roughly 196 MiB
 physical peak in the recorded run occurs
 while Wasmtime compiles the renderer module during startup; the configured 64

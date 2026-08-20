@@ -12,8 +12,10 @@ empty output are logged and replaced by the local result. Summary failure leaves
 the source content visible. Optional `models.embedding`, `models.summary`, and
 `models.collection_parser` entries use the built-in OpenAI-compatible HTTP
 adapter. Summary responses contain both a concise summary and bounded topic
-tags. `models.recommendation` uses OpenAI-compatible chat JSON for providers
-named `ollama`, `openai`, or `openai-compatible`; other provider names use the
+tags. Requests receive only bounded extracted `body_text`; raw or sanitized HTML
+is never included in the summary/topic prompt. `models.recommendation` uses
+OpenAI-compatible chat JSON for providers named `ollama`, `openai`, `claude`,
+`gemini`, or `openai-compatible`; other provider names use the
 bounded Rill rank/feedback HTTP contract. Each endpoint supports API-key environment variables, request and
 response limits, batching, timeouts, bounded retries, and circuit breaking.
 
@@ -40,6 +42,10 @@ and `text_parse`. The text-parse slot powers both summaries and collection
 parsing. Nonsecret config lives in SQLite; optional API keys use encrypted
 secret storage and are never returned. TOML remains the startup default until a
 global slot is saved.
+
+The admin UI provides OpenAI, Claude, Gemini, Ollama, and custom
+OpenAI-compatible presets, one encrypted token field, and a live health test
+before saving each slot.
 
 The development config uses Ollama `embeddinggemma:latest` for embeddings and
 `gemma4:e4b` for enrichment, collection parsing, and ranking.

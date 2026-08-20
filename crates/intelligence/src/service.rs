@@ -25,15 +25,61 @@ impl IntelligenceService {
 
     pub async fn process_summary(&self, document_id: &str) -> Result<(), IntelligenceError> {
         let document = self.load_document(document_id)?;
-        let request = SummaryRequest {
+        let source_instructions = self.source_processing_instructions(document_id)?;
+        let has_unprompted_source = source_instructions.iter().any(|(_, prompt)| prompt.is_empty());
+        let request = |custom_instruction: Option<String>| SummaryRequest {
             title: document.title.clone(),
             source: document.publisher.clone(),
             author: document.author.clone(),
             canonical_url: document.canonical_url.clone(),
             language: document.language.clone(),
             text: bounded_text(&document.body_text, 32_000),
+            custom_instruction,
         };
-        let response = self.summary.summarize(request).await?;
+        let mut selected = if source_instructions.is_empty() || has_unprompted_source {
+            Some(self.summary.summarize(request(None)).await?)
+        } else {
+            None
+        };
+        let mut inclusion = Vec::new();
+        for (source_id, prompt) in source_instructions
+            .iter()
+            .filter(|(_, prompt)| !prompt.is_empty())
+        {
+            let response = self
+                .summary
+                .summarize(request(Some(prompt.clone())))
+                .await?;
+            inclusion.push((source_id.clone(), response.include));
+            // ponytail: one document stores one summary; add per-source presentations if
+            // conflicting translation prompts become common.
+            if response.include && selected.is_none() {
+                selected = Some(response);
+            }
+        }
+        let mut connection = self.pool.connection()?;
+        let transaction = connection.transaction()?;
+        for (source_id, included) in inclusion {
+            transaction.execute(
+                "UPDATE document_curators SET included=?3
+                 WHERE document_id=?1 AND source_instance_id=?2",
+                params![document_id, source_id, included],
+            )?;
+        }
+        let Some(response) = selected else {
+            transaction.execute(
+                "DELETE FROM summaries WHERE entity_type='document' AND entity_id=?1",
+                [document_id],
+            )?;
+            transaction.execute(
+                "DELETE FROM document_topics WHERE document_id=?1",
+                [document_id],
+            )?;
+            transaction.commit()?;
+            drop(connection);
+            self.invalidate_recommendations(None)?;
+            return Ok(());
+        };
         let text = response
             .text
             .split_whitespace()
@@ -46,8 +92,6 @@ impl IntelligenceService {
         }
         let identity = self.summary.identity();
         let topics = normalize_topics(response.tags);
-        let mut connection = self.pool.connection()?;
-        let transaction = connection.transaction()?;
         transaction.execute(
                 "INSERT INTO summaries(id, entity_type, entity_id, provider, model, model_version,
                  input_checksum, summary_text) VALUES (?1, 'document', ?2, ?3, ?4, ?5, ?6, ?7)
@@ -92,6 +136,23 @@ impl IntelligenceService {
         drop(connection);
         self.invalidate_recommendations(None)?;
         Ok(())
+    }
+
+    fn source_processing_instructions(
+        &self,
+        document_id: &str,
+    ) -> Result<Vec<(String, String)>, IntelligenceError> {
+        let connection = self.pool.connection()?;
+        let mut statement = connection.prepare(
+            "SELECT DISTINCT coalesce(dc.source_instance_id, ''),
+             coalesce(si.processing_prompt, '')
+             FROM document_curators dc
+             LEFT JOIN source_instances si ON si.id=dc.source_instance_id
+             WHERE dc.document_id=?1
+             ORDER BY dc.source_instance_id",
+        )?;
+        let rows = statement.query_map([document_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     pub async fn process_embedding(&self, document_id: &str) -> Result<(), IntelligenceError> {
@@ -314,7 +375,7 @@ impl IntelligenceService {
         }
         let (publisher, curated): (Option<String>, bool) = transaction.query_row(
             "SELECT d.publisher, EXISTS(SELECT 1 FROM document_curators dc
-             WHERE dc.document_id = d.id AND dc.collection_entry_id IS NOT NULL
+             WHERE dc.document_id = d.id AND dc.included=1 AND dc.collection_entry_id IS NOT NULL
                AND (dc.source_instance_id IS NULL OR EXISTS (
                  SELECT 1 FROM source_access sa WHERE sa.source_instance_id=dc.source_instance_id
                    AND (sa.user_id IS NULL OR sa.user_id=?2))))
@@ -336,7 +397,7 @@ impl IntelligenceService {
         }
         let mut statement = transaction.prepare(
             "SELECT curator_id, source_instance_id FROM document_curators
-             WHERE document_id = ?1 AND (source_instance_id IS NULL OR EXISTS (
+             WHERE document_id = ?1 AND included=1 AND (source_instance_id IS NULL OR EXISTS (
                SELECT 1 FROM source_access sa WHERE sa.source_instance_id=document_curators.source_instance_id
                  AND (sa.user_id IS NULL OR sa.user_id=?2)))",
         )?;

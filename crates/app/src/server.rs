@@ -2,7 +2,7 @@ use std::{
     collections::BTreeMap,
     env, fs,
     net::{IpAddr, SocketAddr},
-    path::Path as FilePath,
+    path::{Path as FilePath, PathBuf},
     sync::Arc,
     time::Duration,
     time::Instant,
@@ -34,7 +34,7 @@ use rill_extraction::ArticleExtractor;
 use rill_ingestion::{DetectionMode, IngestionError, IngestionService, ParentDisplayPolicy};
 use rill_intelligence::{
     FeedbackKind, IntelligenceError, IntelligenceService, RankedStory, StoryDetailView,
-    StoryVariantView, StreamFilter,
+    StoryVariantView, StreamFilter, UserPreferences,
 };
 use rill_jobs::JobQueue;
 use rill_model_api::{CollectionParserProvider, EmbeddingProvider, SummaryProvider};
@@ -72,6 +72,7 @@ pub(crate) struct AppState {
     pub(crate) pool: DbPool,
     renderer: Arc<dyn Renderer>,
     assets: BrowserAssets,
+    static_dir: PathBuf,
     pub(crate) auth: AuthService,
     ingestion: IngestionService,
     intelligence: IntelligenceService,
@@ -224,6 +225,7 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
         pool,
         renderer,
         assets,
+        static_dir: settings.assets.static_dir.clone(),
         auth,
         ingestion,
         intelligence,
@@ -240,7 +242,8 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
         global_settings,
         metrics,
         instance_id: Uuid::new_v4().to_string(),
-        dev_reload: env::var_os("RILL_DEV_RELOAD").is_some_and(|value| value == "1"),
+        dev_reload: cfg!(debug_assertions)
+            || env::var_os("RILL_DEV_RELOAD").is_some_and(|value| value == "1"),
     };
 
     let mut app = Router::new()
@@ -263,7 +266,6 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
         )
         .route("/reader", get(reader_feed))
         .route("/reader/stream/{slug}", get(reader_stream))
-        .route("/reader/page/{page}", get(reader_page))
         .route("/reader/story/{story_id}", get(reader_story))
         .route(
             "/reader/story/{story_id}/feedback",
@@ -309,6 +311,10 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
             put(crate::admin::api_put_model).delete(crate::admin::api_delete_model),
         )
         .route(
+            "/api/v1/admin/settings/models/{slot}/test",
+            post(crate::admin::api_test_model),
+        )
+        .route(
             "/api/v1/admin/settings/telegram-bot",
             get(crate::admin::api_telegram_bot)
                 .put(crate::admin::api_put_telegram_bot)
@@ -346,6 +352,10 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
             post(api_source_enabled),
         )
         .route(
+            "/api/v1/sources/{source_id}/processing-prompt",
+            post(api_source_processing_prompt),
+        )
+        .route(
             "/api/v1/collections/{raw_item_id}",
             get(api_collection_debug),
         )
@@ -355,6 +365,10 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
         )
         .route("/api/v1/streams", get(api_streams).post(api_create_stream))
         .route("/api/v1/streams/reorder", post(api_reorder_streams))
+        .route(
+            "/api/v1/preferences",
+            get(api_preferences).post(api_update_preferences),
+        )
         .route(
             "/api/v1/streams/{slug}",
             post(api_update_stream).delete(api_delete_stream),

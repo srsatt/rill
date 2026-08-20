@@ -2,13 +2,17 @@
 
 ## Streams
 
-Every user has a stable `/stream/home` and `/reader/stream/home`. Create more
-streams through `POST /api/v1/streams` using a lowercase hyphenated slug.
+Every user has stable Home and All streams. Create and reorder more streams in
+the Streams settings tab or through `POST /api/v1/streams`.
 Filters can include/exclude source, curator, publisher, enriched topic tags, language, text, age,
 coverage, read, and Favorite state. An optional semantic description receives a
 local embedding; an optional ranking instruction is passed only to a configured
 recommendation provider. Provider failure leaves the local scored/diversified
 feed usable.
+
+Experience settings can make subject streams exclusive by user order; Home and
+All remain complete. AI-free mode shows raw excerpts, hides generated topics,
+and uses deterministic freshness ranking for that user.
 
 ## Reader pairing
 
@@ -23,9 +27,13 @@ ordinary HTML forms.
 
 ## HTTP Actions
 
-Admins manage Actions at `/admin` or `/api/v1/actions`. An Action has a name,
+Users manage their own Actions in the Actions settings tab or `/api/v1/actions`. An Action has a name,
 POST/PUT/PATCH URL, timeout, response cap, retry cap, optional encrypted headers,
 and enabled state. The only trigger currently exposed is `story.favorite`.
+
+The browser accepts private header name/value pairs and encrypts values
+immediately; it never depends on a server environment-variable name for a
+per-user setting and never returns stored values to the browser.
 
 On Favorite, Rill first persists local feedback. It then inserts an Action
 execution and durable job with `action:{action_id}:{feedback_event_id}` as the

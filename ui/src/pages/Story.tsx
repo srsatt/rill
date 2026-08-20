@@ -1,7 +1,7 @@
 import type { StoryLinkModel, StoryPageModel, StoryVariantModel } from "../../generated/render-contract";
 import { ModernShell } from "../components/ModernShell";
-import { BookmarkCheckIcon, BookmarkIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, MessageCircleIcon } from "../components/icons";
-import { badge, card, cardContent, cardHeader, table, tableBody, tableCell, tableHead, tableHeader, tableRow } from "../server/solid-ui";
+import { BookmarkCheckIcon, BookmarkIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, MessageCircleIcon, ThumbsDownIcon, ThumbsUpIcon } from "../components/icons";
+import { badge, card, cardContent, cardHeader } from "../server/solid-ui";
 
 export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
   if (props.page.reader) return ReaderStory({ page: props.page, csrfToken: props.csrfToken ?? "" });
@@ -22,22 +22,9 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
   const representative = () => props.page.representative;
   const hasAlternatives = () => props.page.coverageCount > 1;
   return ModernShell({
+      username: props.page.username,
       activeHref: "/stream/home",
-      detail: hasAlternatives() ? (
-        <section aria-labelledby="provenance-heading">
-          <p class="eyebrow">Provenance</p>
-          <h2 id="provenance-heading" class="detail-heading">Coverage map</h2>
-          <p class="detail-description">Rill grouped {props.page.coverageCount} versions and selected one representative.</p>
-          {table(<>
-            {tableHeader(tableRow(<>{tableHead("Publisher")}{tableHead("Status")}</>))}
-            {tableBody(<>
-              {props.page.variants.map((variant) => (
-                tableRow(<>{tableCell(variant.publisher ?? "Unknown")}{tableCell(variant.selected ? "Selected" : "Alternative")}</>)
-              ))}
-            </>)}
-          </>)}
-        </section>
-      ) : undefined,
+      fontFamily: props.page.fontFamily,
       children: <>
       <header class="story-page-header">
         <a href="/stream/home">← Back to feed</a>
@@ -50,8 +37,8 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
         />
         <div class="feedback story-controls" aria-label="Story controls" data-enhancement-fallback>
           <button type="button" onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/read-state`, { read: !props.page.read })}>{props.page.read ? <EyeOffIcon /> : <EyeIcon />} Mark {props.page.read ? "unread" : "read"}</button>
-          <button type="button" aria-pressed={props.page.explicitFeedback === "like"} onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/feedback`, { feedback: "like" })}>👍 Like</button>
-          <button type="button" aria-pressed={props.page.explicitFeedback === "dislike"} onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/feedback`, { feedback: "dislike" })}>👎 Dislike</button>
+          <button type="button" aria-pressed={props.page.explicitFeedback === "like"} onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/feedback`, { feedback: "like" })}><ThumbsUpIcon /> Like</button>
+          <button type="button" aria-pressed={props.page.explicitFeedback === "dislike"} onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/feedback`, { feedback: "dislike" })}><ThumbsDownIcon /> Dislike</button>
           <button type="button" aria-pressed={props.page.favorite} onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/feedback`, { feedback: "favorite" })}>{props.page.favorite ? <BookmarkCheckIcon /> : <BookmarkIcon />} {props.page.favorite ? "Favorited" : "Favorite"}</button>
         </div>
       </header>
@@ -59,9 +46,11 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
         {card(<>
           {cardHeader(<>
             <div class="story-source-line">
-              {badge(representative().publisher ?? "Unknown publisher", "outline")}
+              {representative().canonicalUrl
+                ? <a class="story-source-link" href={representative().canonicalUrl ?? undefined} target="_blank" rel="noopener noreferrer">{badge(representative().publisher ?? "Unknown publisher", "outline")}</a>
+                : badge(representative().publisher ?? "Unknown publisher", "outline")}
               {representative().author ? <span>By {representative().author}</span> : null}
-              <span>{props.page.coverageCount} {props.page.coverageCount === 1 ? "source" : "sources"}</span>
+              {props.page.coverageCount > 1 ? <span>{props.page.coverageCount} sources</span> : null}
             </div>
             <h1>{representative().title}</h1>
             {hasDistinctSummary(representative()) ? <p class="story-deck">{representative().summary}</p> : null}
@@ -80,13 +69,15 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
             <div class={variant.selected ? "coverage-variant-frame selected" : "coverage-variant-frame"}>
               {card(<>
                 {cardHeader(<>
-                  <div class="story-source-line">{badge(variant.selected ? "Selected version" : "Alternative", variant.selected ? "default" : "outline")}<span>{variant.publisher ?? "Unknown publisher"}</span></div>
+                  <div class="story-source-line">{badge(variant.selected ? "Selected version" : "Alternative", variant.selected ? "default" : "outline")}{variant.canonicalUrl ? <a href={variant.canonicalUrl} target="_blank" rel="noopener noreferrer">{variant.publisher ?? "Unknown publisher"}</a> : <span>{variant.publisher ?? "Unknown publisher"}</span>}</div>
                   <h3>{variant.title}</h3>
                 </>)}
                 {cardContent(<>
+                  <p class="meta">{variant.publishedAt ? variant.publishedAt.slice(0, 10) : "Publication date unavailable"}</p>
                   {variant.curators.length === 0 ? <p class="meta">Direct source</p> : variant.curators.map((path) => (
                     <p class="curator-path">Via {path.sourceName ?? path.curatorId}{path.parentTitle ? ` in ${path.parentTitle}` : ""}{path.curatorCommentary ? `: ${path.curatorCommentary}` : ""}</p>
                   ))}
+                  {StoryLinks({ links: variant.links, canonicalUrl: variant.canonicalUrl })}
                   {!variant.selected && <button class="secondary-action" type="button" onClick={() => void mutate(`/api/v1/stories/${props.page.storyId}/representative`, { documentId: variant.documentId })}>Use this version</button>}
                 </>)}
               </>, "coverage-variant")}
@@ -100,11 +91,11 @@ export function Story(props: { page: StoryPageModel; csrfToken?: string }) {
 
 function ReaderStory(props: { page: StoryPageModel; csrfToken: string }) {
   return (
-    <main class="reader story">
+    <main class={`reader story reading-font-${props.page.fontFamily === "serif" ? "serif" : "sans"}`}>
       <p><a href="/reader">← Back to feed</a></p>
       <article>
         <h1 class="reader-story-title">{props.page.representative.title}</h1>
-        <p class="reader-story-meta">{props.page.representative.publisher ?? "Unknown publisher"}{props.page.representative.author ? ` · ${props.page.representative.author}` : ""}</p>
+        <p class="reader-story-meta">{props.page.representative.canonicalUrl ? <a href={props.page.representative.canonicalUrl} target="_blank" rel="noopener noreferrer">{props.page.representative.publisher ?? "Unknown publisher"}</a> : props.page.representative.publisher ?? "Unknown publisher"}{props.page.representative.author ? ` · ${props.page.representative.author}` : ""}</p>
         {hasDistinctSummary(props.page.representative) ? <p class="reader-story-summary">{props.page.representative.summary}</p> : null}
         <div class="article-body">{props.page.representative.bodyText}</div>
         {StoryLinks({ links: props.page.representative.links, canonicalUrl: props.page.representative.canonicalUrl })}
@@ -114,7 +105,7 @@ function ReaderStory(props: { page: StoryPageModel; csrfToken: string }) {
         {props.page.variants.map((variant) => (
           <article>
             <h3>{variant.title}</h3>
-            <p>{variant.publisher ?? "Unknown publisher"}{variant.selected ? " · selected" : ""}</p>
+            <p>{variant.canonicalUrl ? <a href={variant.canonicalUrl} target="_blank" rel="noopener noreferrer">{variant.publisher ?? "Unknown publisher"}</a> : variant.publisher ?? "Unknown publisher"}{variant.selected ? " · selected" : ""}</p>
             {variant.curators.map((path) => <p>Via {path.sourceName ?? path.curatorId}{path.parentTitle ? ` in ${path.parentTitle}` : ""}{path.curatorCommentary ? `: ${path.curatorCommentary}` : ""}</p>)}
             {!variant.selected && (
               <form method="post" action={`/reader/story/${props.page.storyId}/variant`}>
@@ -134,8 +125,8 @@ function ReaderStory(props: { page: StoryPageModel; csrfToken: string }) {
         </form>
         <form method="post" action={`/reader/story/${props.page.storyId}/feedback`}>
           <input type="hidden" name="csrf_token" value={props.csrfToken} />
-          <button name="feedback" value="like" aria-pressed={props.page.explicitFeedback === "like"}>👍 Like</button>
-          <button name="feedback" value="dislike" aria-pressed={props.page.explicitFeedback === "dislike"}>👎 Dislike</button>
+          <button name="feedback" value="like" aria-pressed={props.page.explicitFeedback === "like"}><ThumbsUpIcon /> Like</button>
+          <button name="feedback" value="dislike" aria-pressed={props.page.explicitFeedback === "dislike"}><ThumbsDownIcon /> Dislike</button>
           <button name="feedback" value="favorite" aria-pressed={props.page.favorite}>{props.page.favorite ? <BookmarkCheckIcon /> : <BookmarkIcon />} {props.page.favorite ? "Favorited" : "Favorite"}</button>
         </form>
       </section>

@@ -73,26 +73,22 @@ impl IntelligenceService {
         if topic.is_empty() || topic.chars().count() > 80 {
             return Err(IntelligenceError::Invalid("topic is invalid".into()));
         }
-        let private_scope = format!("user:{user_id}");
         let sql_limit = i64::try_from(limit.min(200)).unwrap_or(200);
         let connection = self.pool.connection()?;
         let mut statement = connection.prepare(
             "SELECT st.story_id FROM story_topics st
              WHERE st.topic=?1 COLLATE NOCASE AND EXISTS (
                SELECT 1 FROM story_memberships sm JOIN documents d ON d.id=sm.document_id
-               WHERE sm.story_id=st.story_id AND (d.visibility_scope=?2 OR EXISTS (
+               WHERE sm.story_id=st.story_id AND EXISTS (
                  SELECT 1 FROM document_access da WHERE da.document_id=d.id
-                   AND (da.user_id IS NULL OR da.user_id=?3))))
+                   AND (da.user_id IS NULL OR da.user_id=?2)))
              ORDER BY (
                SELECT max(coalesce(d.published_at, d.created_at))
                FROM story_memberships sm JOIN documents d ON d.id=sm.document_id
                WHERE sm.story_id=st.story_id
-             ) DESC LIMIT ?4",
+             ) DESC LIMIT ?3",
         )?;
-        let rows = statement
-            .query_map(params![topic, private_scope, user_id, sql_limit], |row| {
-                row.get(0)
-            })?;
+        let rows = statement.query_map(params![topic, user_id, sql_limit], |row| row.get(0))?;
         let story_ids = rows.collect::<rusqlite::Result<Vec<String>>>()?;
         drop(statement);
         drop(connection);
@@ -132,6 +128,7 @@ impl IntelligenceService {
         story_ids: &[String],
         context: &str,
     ) -> Result<Vec<RankedStory>, IntelligenceError> {
+        let preferences = self.user_preferences(user_id)?;
         let mut stories = Vec::with_capacity(story_ids.len());
         let mut seen = HashSet::new();
         for story_id in story_ids.iter().take(200) {
@@ -143,7 +140,11 @@ impl IntelligenceService {
                 Err(IntelligenceError::NotFound) => continue,
                 Err(error) => return Err(error),
             };
-            let topics = self.story_topics(&detail.story_id)?;
+            let topics = if preferences.ai_free_mode {
+                Vec::new()
+            } else {
+                self.story_topics(&detail.story_id)?
+            };
             stories.push(RankedStory {
                 story_id: detail.story_id,
                 document_id: detail.representative.document_id,
@@ -166,7 +167,7 @@ impl IntelligenceService {
         user_id: &str,
         story_id: &str,
     ) -> Result<StoryDetailView, IntelligenceError> {
-        let private_scope = format!("user:{user_id}");
+        let preferences = self.user_preferences(user_id)?;
         let connection = self.pool.connection()?;
         let state = connection
             .query_row(
@@ -177,10 +178,10 @@ impl IntelligenceService {
                  WHERE s.id=?2 AND EXISTS (\n\
                    SELECT 1 FROM story_memberships visible_sm\n\
                    JOIN documents visible_d ON visible_d.id=visible_sm.document_id\n\
-                   WHERE visible_sm.story_id=s.id AND (visible_d.visibility_scope=?3 OR EXISTS (\n\
+                   WHERE visible_sm.story_id=s.id AND EXISTS (\n\
                      SELECT 1 FROM document_access da WHERE da.document_id=visible_d.id\n\
-                       AND (da.user_id IS NULL OR da.user_id=?1))))",
-                params![user_id, story_id, private_scope],
+                       AND (da.user_id IS NULL OR da.user_id=?1)))",
+                params![user_id, story_id],
                 |row| {
                     Ok((
                         row.get::<_, Option<String>>(0)?,
@@ -205,12 +206,12 @@ impl IntelligenceService {
                WHERE cu.document_id=d.id ORDER BY cu.created_at LIMIT 1),
              d.author, d.publisher, d.language, d.published_at, d.updated_at
              FROM story_memberships sm JOIN documents d ON d.id=sm.document_id
-             WHERE sm.story_id=?1 AND (d.visibility_scope=?2 OR EXISTS (
+             WHERE sm.story_id=?1 AND EXISTS (
                SELECT 1 FROM document_access da WHERE da.document_id=d.id
-                 AND (da.user_id IS NULL OR da.user_id=?3)))
+                 AND (da.user_id IS NULL OR da.user_id=?2))
              ORDER BY coalesce(d.published_at, d.created_at), d.id",
         )?;
-        let rows = statement.query_map(params![story_id, private_scope, user_id], |row| {
+        let rows = statement.query_map(params![story_id, user_id], |row| {
             Ok(StoryVariantView {
                 document_id: row.get(0)?,
                 title: row.get(1)?,
@@ -230,6 +231,11 @@ impl IntelligenceService {
             })
         })?;
         let mut variants = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+        if preferences.ai_free_mode {
+            for variant in &mut variants {
+                variant.summary = variant.body_text.chars().take(600).collect();
+            }
+        }
         drop(statement);
         if variants.is_empty() {
             return Err(IntelligenceError::NotFound);
@@ -329,15 +335,14 @@ impl IntelligenceService {
         story_id: &str,
         document_id: &str,
     ) -> Result<(), IntelligenceError> {
-        let private_scope = format!("user:{user_id}");
         let exists: bool = self.pool.with_connection(|connection| {
             connection.query_row(
                 "SELECT EXISTS(SELECT 1 FROM stories s JOIN story_memberships sm ON sm.story_id=s.id
                  JOIN documents d ON d.id=sm.document_id WHERE s.id=?1 AND d.id=?2
-                 AND (d.visibility_scope=?3 OR EXISTS (
+                 AND EXISTS (
                    SELECT 1 FROM document_access da WHERE da.document_id=d.id
-                     AND (da.user_id IS NULL OR da.user_id=?4))))",
-                params![story_id, document_id, private_scope, user_id],
+                     AND (da.user_id IS NULL OR da.user_id=?3)))",
+                params![story_id, document_id, user_id],
                 |row| row.get(0),
             )
         })?;
@@ -361,7 +366,7 @@ fn load_curators(
          LEFT JOIN source_instances si ON si.id=dc.source_instance_id
          LEFT JOIN collection_entries ce ON ce.id=dc.collection_entry_id
          LEFT JOIN raw_items parent ON parent.id=ce.parent_raw_item_id
-         WHERE dc.document_id=?1 AND (dc.source_instance_id IS NULL OR EXISTS (
+         WHERE dc.document_id=?1 AND dc.included=1 AND (dc.source_instance_id IS NULL OR EXISTS (
            SELECT 1 FROM source_access sa WHERE sa.source_instance_id=dc.source_instance_id
              AND (sa.user_id IS NULL OR sa.user_id=?2)))
          ORDER BY dc.created_at, dc.curator_kind, dc.curator_id",

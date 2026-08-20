@@ -30,7 +30,7 @@ fn normalize_feed_item(
     visibility_scope: &str,
 ) -> Result<Option<NormalizedDocument>, IngestionError> {
     let title = item.title.as_deref().unwrap_or_default().trim();
-    let body = item.body_text.as_deref().unwrap_or_default().trim();
+    let body = clean_content_text(item.body_text.as_deref().unwrap_or_default());
     if title.is_empty() && body.is_empty() {
         return Ok(None);
     }
@@ -52,8 +52,8 @@ fn normalize_feed_item(
         } else {
             title.to_owned()
         },
-        body_text: body.to_owned(),
-        sanitized_html: item.body_html.as_deref().map(clean),
+        body_text: body,
+        sanitized_html: item.body_html.as_deref().map(clean_content_html),
         author: item.author.clone(),
         publisher,
         canonical_url,

@@ -30,6 +30,10 @@ pub(crate) fn cluster_document(
         .published_at
         .unwrap_or_else(unix_now)
         .saturating_sub(service.cluster_window_seconds);
+    let ceiling = document
+        .published_at
+        .unwrap_or_else(unix_now)
+        .saturating_add(service.cluster_window_seconds);
     let mut statement = connection.prepare(
         "SELECT s.id, s.anchor_document_id, er.vector_f32le
          FROM stories s
@@ -39,6 +43,12 @@ pub(crate) fn cluster_document(
            AND er.provider = ?3 AND er.model = ?4 AND er.model_version = ?5
            AND coalesce(d.published_at, d.created_at) >= ?6
            AND (d.language = ?7 OR d.language IS NULL OR ?7 IS NULL)
+           AND coalesce(d.published_at, d.created_at) <= ?8
+           AND (?9 IS NULL OR NOT EXISTS (
+             SELECT 1 FROM story_memberships same_sm
+             JOIN documents same_d ON same_d.id=same_sm.document_id
+             WHERE same_sm.story_id=s.id AND lower(same_d.publisher)=lower(?9)
+           ))
          ORDER BY coalesce(d.published_at, d.created_at) DESC LIMIT 500",
     )?;
     let rows = statement.query_map(
@@ -50,6 +60,8 @@ pub(crate) fn cluster_document(
             identity.version,
             cutoff,
             document.language,
+            ceiling,
+            document.publisher,
         ],
         |row| {
             Ok((
@@ -122,6 +134,17 @@ pub(crate) fn cluster_document(
         )?;
         if remaining == 0 {
             transaction.execute("DELETE FROM stories WHERE id = ?1", [&current_story])?;
+        } else {
+            transaction.execute(
+                "UPDATE stories SET anchor_document_id=(
+                   SELECT sm.document_id FROM story_memberships sm
+                   JOIN documents d ON d.id=sm.document_id
+                   WHERE sm.story_id=?1
+                   ORDER BY coalesce(d.published_at, d.created_at) DESC, d.id LIMIT 1
+                 ), updated_at=unixepoch()
+                 WHERE id=?1 AND anchor_document_id=?2",
+                params![current_story, document.id],
+            )?;
         }
     }
     transaction.commit()?;

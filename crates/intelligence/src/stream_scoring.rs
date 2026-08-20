@@ -349,6 +349,7 @@ mod scoring_tests {
             document_id: story_id.into(),
             title: story_id.into(),
             summary: String::new(),
+            raw_excerpt: String::new(),
             canonical_url: None,
             publisher: None,
             language: None,

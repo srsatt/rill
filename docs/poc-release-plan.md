@@ -20,8 +20,8 @@ Absence of hosted CI is accepted for this source-only prerelease. Local release 
 
 ## Local gate result — 2026-08-19
 
-- Formatting, Clippy, all 133 Rust tests, typechecking, renderer verification, and all 6 browser tests pass.
-- ScriptC coverage is 253/253 statements static with no dynamic remainder.
+- Formatting, Clippy, all 137 Rust tests, typechecking, renderer verification, and all 8 browser tests pass.
+- ScriptC coverage is 239/239 statements static with no dynamic remainder.
 - Release build, packaged `rill doctor`, and deterministic resource measurement pass.
 - Current measurements are recorded in [resource-measurements.md](resource-measurements.md) and [implementation-report.md](implementation-report.md).
 

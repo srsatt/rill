@@ -375,6 +375,41 @@ async fn api_source_enabled(
     }
 }
 
+async fn api_source_processing_prompt(
+    State(state): State<AppState>,
+    Path(source_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<SourceProcessingPromptRequest>,
+) -> Response {
+    let principal = match write_principal(&state, &headers).await {
+        Ok(principal) => principal,
+        Err(response) => return response,
+    };
+    let ingestion = state.ingestion.clone();
+    let user_id = principal.user.id;
+    let is_admin = principal.user.role == Role::Admin;
+    match tokio::task::spawn_blocking(move || {
+        ingestion.set_source_processing_prompt(
+            &source_id,
+            &user_id,
+            is_admin,
+            &request.prompt,
+        )
+    })
+    .await
+    {
+        Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
+        Ok(Err(error)) => ingestion_error(error),
+        Err(failure) => {
+            error!(error = %failure, "source processing instructions task failed");
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "source instructions update unavailable",
+            )
+        }
+    }
+}
+
 async fn api_poll_source(
     State(state): State<AppState>,
     Path(source_id): Path<String>,

@@ -178,10 +178,13 @@ pub fn extract_html(
         Selector::parse("h1, h2, h3, p, blockquote, pre, li, figure").expect("static selector");
     let blocks = root
         .select(&content_selector)
-        .filter(|element| !is_chrome(element))
+        .filter(|element| {
+            !is_chrome(element)
+                && !is_mastodon_fallback(&normalize(&element.text().collect::<Vec<_>>().join(" ")))
+        })
         .collect::<Vec<_>>();
     let body_text = if blocks.is_empty() {
-        normalize(&root.text().collect::<Vec<_>>().join(" "))
+        clean_content_text(&root.text().collect::<Vec<_>>().join(" "))
     } else {
         blocks
             .iter()
@@ -375,6 +378,35 @@ fn normalize(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+const MASTODON_FALLBACK: &str = "To use the Mastodon web application, please enable JavaScript.";
+
+fn is_mastodon_fallback(value: &str) -> bool {
+    value.contains(MASTODON_FALLBACK)
+}
+
+pub fn clean_content_text(value: &str) -> String {
+    let cutoff = content_cutoff(value);
+    let fragment = Html::parse_fragment(&value[..cutoff]);
+    normalize(&fragment.root_element().text().collect::<Vec<_>>().join(" "))
+}
+
+pub fn clean_content_html(value: &str) -> String {
+    ammonia::clean(&value[..content_cutoff(value)])
+}
+
+fn content_cutoff(value: &str) -> usize {
+    let cutoff = value.find(MASTODON_FALLBACK).unwrap_or(value.len());
+    let mut cutoff = cutoff;
+    if let Some(image) = value[..cutoff].rfind("<img")
+        && value[image..cutoff]
+            .to_ascii_lowercase()
+            .contains("mastodon")
+    {
+        cutoff = image;
+    }
+    cutoff
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -426,6 +458,32 @@ mod tests {
             error,
             ExtractionError::Unsupported("challenge page")
         ));
+    }
+
+    #[test]
+    fn removes_mastodon_javascript_fallback_from_article_text() {
+        let html = r#"<html><head><title>GrapheneOS on Motorola</title></head><body><main>
+          <p>GrapheneOS is projected to reach high-end Motorola phones in 2027.</p>
+          <p>This security-focused operating system currently targets a narrower device range.</p>
+          <div><img alt="Mastodon" src="/logo.svg"><p>To use the Mastodon web application, please enable JavaScript. Alternatively, try one of the native apps for Mastodon for your platform.</p></div>
+        </main></body></html>"#;
+        let article = extract_html(
+            &Url::parse("https://social.example/@graphene/1").unwrap(),
+            html,
+            "public",
+        )
+        .unwrap();
+
+        assert!(article.document.body_text.contains("Motorola phones"));
+        assert!(!article.document.body_text.contains("enable JavaScript"));
+        assert!(
+            !article
+                .document
+                .sanitized_html
+                .as_deref()
+                .unwrap()
+                .contains("enable JavaScript")
+        );
     }
 
     #[test]

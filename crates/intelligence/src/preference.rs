@@ -105,9 +105,9 @@ impl IntelligenceService {
              (SELECT count(*) FROM story_memberships sm WHERE sm.story_id=fe.story_id),
              d.publisher,
              coalesce((SELECT group_concat(DISTINCT dc.source_instance_id)
-               FROM document_curators dc WHERE dc.document_id=d.id), ''),
+               FROM document_curators dc WHERE dc.document_id=d.id AND dc.included=1), ''),
              coalesce((SELECT group_concat(DISTINCT dc.curator_id)
-               FROM document_curators dc WHERE dc.document_id=d.id), '')
+               FROM document_curators dc WHERE dc.document_id=d.id AND dc.included=1), '')
              FROM feedback_events fe JOIN documents d ON d.id=fe.document_id
              JOIN embedding_records er ON er.id=(SELECT latest.id FROM embedding_records latest
                WHERE latest.entity_type='document' AND latest.entity_id=d.id

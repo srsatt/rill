@@ -1,4 +1,4 @@
-type IconName = "bookmark" | "bookmark-check" | "external-link" | "eye" | "eye-off" | "message-circle" | "search";
+type IconName = "bookmark" | "bookmark-check" | "external-link" | "eye" | "eye-off" | "message-circle" | "search" | "thumbs-up" | "thumbs-down";
 
 function Icon(props: { name: IconName }) {
   return <svg class="rill-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -32,4 +32,12 @@ export function EyeIcon() {
 
 export function EyeOffIcon() {
   return <Icon name="eye-off" />;
+}
+
+export function ThumbsUpIcon() {
+  return <Icon name="thumbs-up" />;
+}
+
+export function ThumbsDownIcon() {
+  return <Icon name="thumbs-down" />;
 }

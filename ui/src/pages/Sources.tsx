@@ -7,12 +7,12 @@ export function Sources(props: { page: SourcesPageModel }) {
     username: props.page.username,
     activeHref: "/sources",
     children: <>
-      <header class="page-header source-page-header"><div><p class="eyebrow">Make Rill yours</p><h1>Build your reading mix</h1><p>Start with one link. Rill detects Telegram channels, RSS/Atom feeds, and feeds published by normal websites.</p></div></header>
+      <header class="page-header source-page-header"><div><h1>Build your reading mix</h1><p>Start with one link. Rill detects Telegram channels, RSS/Atom feeds, and feeds published by normal websites.</p></div></header>
       <p id="sources-error" role="alert" class="error" hidden></p>
 
       <section aria-labelledby="quick-add-heading" class="quick-add-section">
         {card(<>
-          {cardHeader(<><p class="eyebrow">Fastest path</p><h2 id="quick-add-heading">Paste a source link</h2><p class="section-description">No feed URL hunting. Paste a website, RSS/Atom URL, Telegram channel link, or @channel.</p></>, "p-0 pb-5")}
+          {cardHeader(<><h2 id="quick-add-heading">Paste a source link</h2><p class="section-description">Website, RSS/Atom URL, Telegram channel link, or @channel.</p></>, "p-0 pb-5")}
           {cardContent(<>
             <form id="source-quick-add" class="quick-add-form">
               <label class="sr-only" for="quick-source-input">Source link</label>
@@ -28,12 +28,6 @@ export function Sources(props: { page: SourcesPageModel }) {
           </>, "p-0")}
         </>, "quick-add-card")}
       </section>
-
-      <ol class="setup-path" aria-label="Rill setup path">
-        <li><strong>1. Add sources</strong><span>Paste links or connect mail.</span></li>
-        <li><strong>2. Let Rill work</strong><span>Extraction, summaries, and tags run in background.</span></li>
-        <li><strong>3. Read broad streams</strong><span>Home, Technology, AI, World, and Science.</span></li>
-      </ol>
 
       <section aria-labelledby="configured-sources-heading">
         {card(<>
@@ -91,25 +85,6 @@ export function Sources(props: { page: SourcesPageModel }) {
         , "p-0")}</>, "admin-section")}
       </section>
 
-      <section aria-labelledby="streams-heading" class="stream-settings-section">
-        {card(<>{cardHeader(<><p class="eyebrow">Reading lanes</p><h2 id="streams-heading">High-level streams</h2><p class="section-description">Rill starts with five broad streams. Add a custom one only when you want a durable subject—not one stream per tag.</p></>, "p-0 pb-5")}{cardContent(<>
-        <form id="stream-create" class="admin-form">
-          <label>Stream name <input name="name" placeholder="Local life" required /></label>
-          <label>What belongs here? <textarea name="semanticDescription" placeholder="Local events, transport, city policy, and useful neighborhood news." /></label>
-          <label>What should rank higher? <textarea name="rankingInstruction" placeholder="Prefer practical changes and original reporting over opinion." /></label>
-          <details class="advanced-options">
-            <summary>Advanced tag filters</summary>
-            <div class="admin-form">
-              <label>Include topics <input name="includeTopics" placeholder="transport, local politics" aria-describedby="stream-topic-help" /></label>
-              <label>Exclude topics <input name="excludeTopics" placeholder="sponsored, cryptocurrency" /></label>
-              <p id="stream-topic-help" class="field-help">Optional. Broad streams usually work better without exact tag rules.</p>
-            </div>
-          </details>
-          <button class="primary-action">Create custom stream</button>
-        </form>
-        <div id="stream-list"></div>
-        </>, "p-0")}</>, "admin-section")}
-      </section>
     </>,
   });
 }

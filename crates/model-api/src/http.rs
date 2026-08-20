@@ -174,9 +174,10 @@ impl SummaryProvider for OpenAiCompatibleProvider {
                 "response_format": {"type": "json_object"},
                 "temperature": 0,
                 "messages": [
-                    {"role": "system", "content": "Return only JSON with this shape: {\"summary\":\"two concise factual sentences\",\"tags\":[{\"label\":\"lowercase topic\",\"confidence\":0.9}]}. Produce 3-6 tags. Exactly one tag must be the best high-level category from: technology, ai, world, science, business, culture, health, environment. Remaining tags must be specific. Avoid generic tags such as news, article, or update."},
+                    {"role": "system", "content": "Return only JSON with this shape: {\"include\":true,\"summary\":\"two concise factual sentences\",\"tags\":[{\"label\":\"lowercase topic\",\"confidence\":0.9}]}. Apply source instructions only to inclusion, summary language/content, and tags. Set include=false when source instructions say this item should be filtered. Produce 3-6 tags. Exactly one tag must be the best high-level category from: technology, ai, world, science, business, culture, health, environment. Remaining tags must be specific. Avoid generic tags such as news, article, or update."},
                     {"role": "user", "content": format!(
-                        "Summarize this article to help decide whether it is worth reading. Prefer concrete facts, numbers, new claims, and consequences.\nTitle: {}\nSource: {}\nAuthor: {}\nLanguage: {}\nURL: {}\nText:\n{}",
+                        "Summarize this article to help decide whether it is worth reading. Prefer concrete facts, numbers, new claims, and consequences.\nSource instructions: {}\nTitle: {}\nSource: {}\nAuthor: {}\nLanguage: {}\nURL: {}\nText:\n{}",
+                        request.custom_instruction.as_deref().map(|value| bounded_text(value, 4_000)).unwrap_or_else(|| "none".into()),
                         bounded_text(&request.title, 500),
                         request.source.as_deref().unwrap_or("unknown"),
                         request.author.as_deref().unwrap_or("unknown"),
@@ -188,19 +189,24 @@ impl SummaryProvider for OpenAiCompatibleProvider {
             }))
             .await?;
         let content = chat_content(&response)?;
-        let (text, tags) = match parse_json_object::<ChatEnrichment>(&content) {
+        let (text, tags, include) = match parse_json_object::<ChatEnrichment>(&content) {
             Ok(enrichment) => (
                 enrichment.summary.trim().to_owned(),
                 validated_topics(enrichment.tags, fallback_tags),
+                enrichment.include,
             ),
-            Err(_) => (content.trim().to_owned(), fallback_tags),
+            Err(_) => (content.trim().to_owned(), fallback_tags, true),
         };
         if text.is_empty() || text.chars().count() > 2_000 {
             return Err(ModelError::InvalidOutput(
                 "summary length is invalid".into(),
             ));
         }
-        Ok(SummaryResponse { text, tags })
+        Ok(SummaryResponse {
+            text,
+            tags,
+            include,
+        })
     }
 
     async fn health(&self) -> Result<ModelHealth, ModelError> {
@@ -241,8 +247,14 @@ impl CollectionParserProvider for OpenAiCompatibleProvider {
 #[derive(Debug, Deserialize)]
 struct ChatEnrichment {
     summary: String,
+    #[serde(default = "default_include")]
+    include: bool,
     #[serde(default)]
     tags: Vec<ChatTopic>,
+}
+
+const fn default_include() -> bool {
+    true
 }
 
 #[derive(Debug, Deserialize)]

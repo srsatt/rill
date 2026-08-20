@@ -1,8 +1,9 @@
 import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
-import type { StreamLink } from "../../generated/render-contract";
+import type { StoryCardModel, StreamLink } from "../../generated/render-contract";
 import { primaryLinks } from "../components/ModernShell";
-import { BookmarkCheckIcon, BookmarkIcon, EyeIcon, EyeOffIcon } from "../components/icons";
+import { BookmarkCheckIcon, BookmarkIcon, EyeIcon, EyeOffIcon, ThumbsDownIcon, ThumbsUpIcon } from "../components/icons";
+import { StoryCard } from "../components/StoryCard";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
@@ -100,17 +101,17 @@ function MobileNavigation(props: { username: string; streams: StreamLink[]; acti
 
 function AccountMenu(props: { username: string }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger as={Button} variant="ghost" class="account-menu-trigger">
+    <DropdownMenu modal={false} placement="top-end">
+      <DropdownMenuTrigger as={Button} variant="ghost" class="account-menu-trigger" aria-label={`Account menu for ${props.username}`}>
         <Avatar class="size-9"><AvatarFallback class="account-avatar !bg-primary !text-primary-foreground">{props.username.slice(0, 1).toUpperCase()}</AvatarFallback></Avatar>
-        <span><strong>{props.username}</strong><small>Account menu</small></span>
+        <strong>{props.username}</strong>
       </DropdownMenuTrigger>
-      <DropdownMenuContent class="w-56">
+      <DropdownMenuContent class="max-h-[min(24rem,calc(100dvh-1rem))] w-56 overflow-y-auto">
         <DropdownMenuLabel>{props.username}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem as="a" href="/reader">Reader mode</DropdownMenuItem>
         <DropdownMenuItem as="a" href="/settings/readers">Settings</DropdownMenuItem>
-        <DropdownMenuItem as="a" href="/sources">Sources and streams</DropdownMenuItem>
+        <DropdownMenuItem as="a" href="/sources">Sources</DropdownMenuItem>
         <DropdownMenuItem as="a" href="/admin">Administration</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Theme</DropdownMenuLabel>
@@ -150,7 +151,10 @@ function FeedToolbar() {
       if (sort() === "Newest") return (right.dataset.publishedAt ?? "").localeCompare(left.dataset.publishedAt ?? "");
       return Number(left.dataset.rank ?? "0") - Number(right.dataset.rank ?? "0");
     });
-    for (const row of rows) list.append(row);
+    for (const row of rows) {
+      const item: HTMLElement | null = row.parentElement === list ? row : row.closest<HTMLElement>(".infinite-feed-page");
+      if (item?.parentElement === list) list.append(item);
+    }
   };
 
   return (
@@ -164,8 +168,8 @@ function FeedToolbar() {
         <TabsContent value="unread" class="sr-only">Showing stories not marked read.</TabsContent>
       </Tabs>
       <TextField class="feed-search">
-        <TextFieldLabel class="sr-only">Filter stories on this page</TextFieldLabel>
-        <TextFieldInput type="search" placeholder="Filter this page" value={query()} onInput={(event) => { setQuery(event.currentTarget.value); updateRows(); }} />
+        <TextFieldLabel class="sr-only">Filter stories</TextFieldLabel>
+        <TextFieldInput type="search" placeholder="Filter stories" value={query()} onInput={(event) => { setQuery(event.currentTarget.value); updateRows(); }} />
       </TextField>
       <Select<string>
         options={topics}
@@ -191,7 +195,7 @@ function FeedToolbar() {
       </Select>
       <Switch checked={compact()} onChange={(value) => { setCompact(value); updateRows(); }} class="compact-switch">
         <SwitchControl><SwitchThumb /></SwitchControl>
-        <SwitchLabel>Compact summaries</SwitchLabel>
+        <SwitchLabel>Compact</SwitchLabel>
       </Switch>
     </div>
   );
@@ -208,10 +212,9 @@ function StoryFeedback(props: { storyId: string }) {
   };
   return (
     <div class="feedback" aria-label="Story feedback">
-      {[["like", "👍 Like"], ["dislike", "👎 Dislike"]].map(([value, label]) => (
-        <Toggle pressed={selected() === value} onChange={() => void choose(value)} disabled={busy()} variant="outline" size="sm">{label}</Toggle>
-      ))}
-      <Toggle pressed={selected() === "favorite"} onChange={() => void choose("favorite")} disabled={busy()} variant="outline" size="sm"><BookmarkIcon /> Favorite</Toggle>
+       <Toggle aria-label="Like" title="Like" pressed={selected() === "like"} onChange={() => void choose("like")} disabled={busy()} variant="outline" size="sm"><ThumbsUpIcon /><span class="feedback-label">Like</span></Toggle>
+       <Toggle aria-label="Dislike" title="Dislike" pressed={selected() === "dislike"} onChange={() => void choose("dislike")} disabled={busy()} variant="outline" size="sm"><ThumbsDownIcon /><span class="feedback-label">Dislike</span></Toggle>
+       <Toggle aria-label="Favorite" title="Favorite" pressed={selected() === "favorite"} onChange={() => void choose("favorite")} disabled={busy()} variant="outline" size="sm"><BookmarkIcon /><span class="feedback-label">Favorite</span></Toggle>
     </div>
   );
 }
@@ -237,12 +240,62 @@ function StoryActions(props: { storyId: string; initialRead: boolean; initialFav
       {error() && <Alert variant="destructive"><AlertDescription>{error()}</AlertDescription></Alert>}
       <div class="feedback" aria-label="Story controls">
         <Button type="button" variant="outline" size="sm" onClick={() => void setReadState()}>{read() ? <EyeOffIcon /> : <EyeIcon />} Mark {read() ? "unread" : "read"}</Button>
-        <Toggle pressed={feedback() === "like"} onChange={() => void setStoryFeedback("like")} variant="outline" size="sm">👍 Like</Toggle>
-        <Toggle pressed={feedback() === "dislike"} onChange={() => void setStoryFeedback("dislike")} variant="outline" size="sm">👎 Dislike</Toggle>
+        <Toggle pressed={feedback() === "like"} onChange={() => void setStoryFeedback("like")} variant="outline" size="sm"><ThumbsUpIcon /> Like</Toggle>
+        <Toggle pressed={feedback() === "dislike"} onChange={() => void setStoryFeedback("dislike")} variant="outline" size="sm"><ThumbsDownIcon /> Dislike</Toggle>
         <Toggle pressed={favorite()} onChange={() => void setStoryFeedback("favorite")} variant="outline" size="sm">{favorite() ? <BookmarkCheckIcon /> : <BookmarkIcon />} {favorite() ? "Favorited" : "Favorite"}</Toggle>
       </div>
     </div>
   );
+}
+
+interface StreamFeedResponse {
+  stories: StoryCardModel[];
+  hasMore: boolean;
+}
+
+function activateStoryFeedback(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>("[data-story-feedback-enhancement]").forEach((host) => {
+    if (host.dataset.enhanced === "true") return;
+    render(() => <StoryFeedback storyId={host.dataset.storyId ?? ""} />, host);
+    finishMount(host);
+  });
+}
+
+function activateInfiniteFeed(): void {
+  const sentinel = document.querySelector<HTMLElement>("[data-infinite-feed]");
+  const list = document.querySelector<HTMLElement>("[data-story-list]");
+  if (!sentinel || !list || !("IntersectionObserver" in window)) return;
+  let offset = Number(sentinel.dataset.offset ?? "0");
+  let busy = false;
+  const observer = new IntersectionObserver((entries) => {
+    if (busy || !entries.some((entry) => entry.isIntersecting)) return;
+    busy = true;
+    const slug = encodeURIComponent(sentinel.dataset.stream ?? "home");
+    void fetch(`/api/v1/streams/${slug}/feed?offset=${offset}&limit=10`, { credentials: "same-origin" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error();
+        const page = await response.json() as StreamFeedResponse;
+        if (page.stories.length > 0) {
+          page.stories.forEach((story, index) => {
+            const host = document.createElement("div");
+            host.className = "infinite-feed-page";
+            list.append(host);
+            render(() => <StoryCard story={story} />, host);
+            const row = host.querySelector<HTMLElement>("[data-story-id]");
+            if (row) row.dataset.rank = String(offset + index);
+            activateStoryFeedback(host);
+          });
+          offset += page.stories.length;
+        }
+        if (!page.hasMore || page.stories.length === 0) {
+          observer.disconnect();
+          sentinel.remove();
+        }
+      })
+      .catch(() => { sentinel.textContent = "More stories could not be loaded."; observer.disconnect(); })
+      .finally(() => { busy = false; });
+  }, { rootMargin: "400px 0px" });
+  observer.observe(sentinel);
 }
 
 export function activateModernEnhancements(): void {
@@ -260,12 +313,10 @@ export function activateModernEnhancements(): void {
     render(() => <FeedToolbar />, host);
     finishMount(host);
   });
-  document.querySelectorAll<HTMLElement>("[data-story-feedback-enhancement]").forEach((host) => {
-    render(() => <StoryFeedback storyId={host.dataset.storyId ?? ""} />, host);
-    finishMount(host);
-  });
+  activateStoryFeedback(document);
   document.querySelectorAll<HTMLElement>("[data-story-actions-enhancement]").forEach((host) => {
     render(() => <StoryActions storyId={host.dataset.storyId ?? ""} initialRead={host.dataset.read === "true"} initialFavorite={host.dataset.favorite === "true"} initialFeedback={host.dataset.feedback ?? ""} />, host);
     finishMount(host);
   });
+  activateInfiniteFeed();
 }

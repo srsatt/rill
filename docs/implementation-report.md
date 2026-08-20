@@ -10,7 +10,7 @@ Rill now ranks locally with a durable bounded logistic model, preserves typed or
 
 - Raw feedback and embeddings remain authoritative. A coalesced `RefitPreferenceModel` job fits L2-regularized binary logistic regression after five new labeled events, uses at most 500 recent mixed-class examples, stores versioned coefficients atomically, and invalidates ranking caches. Ranking stays deterministic when the model is absent, incompatible, corrupt, or under-labeled; otherwise it blends 75% deterministic score with 25% preference probability. Provider-controlled ranking and feedback are disabled.
 - `RawSourceItem` links now use bounded `{url, relation, title, ordinal}` values. RSS `<comments>` and Atom `rel="replies"` become normalized persisted document links without hostname rules. Story views render distinct “Open original” and “Discussion” actions while Favorite payloads retain the canonical article URL.
-- HTTP actions accept an optional structured JSON body template and generic environment-backed headers. The server, not the browser, reads the named environment variable and encrypts the resulting header through the existing secret store. Local Favorite persistence commits before delivery is queued; failed delivery cannot undo it.
+- HTTP actions accept an optional structured JSON body template and per-user private headers. The settings form sends the value once, the server encrypts it through the existing secret store, and views return only a redacted configured state. Local Favorite persistence commits before delivery is queued; failed delivery cannot undo it.
 - A dedicated durable `ExecuteAction` queue consumer prevents slow model enrichment from blocking user-triggered Favorite delivery. General job concurrency remains bounded by configuration.
 - Reader title, metadata, and summary use a compact semantic type scale and AA contrast. Shared spacing/control tokens, responsive controls, explicit emoji feedback labels, a favicon, and seven official Lucide symbols cover the visual audit without adding client JavaScript to Reader.
 
@@ -21,16 +21,16 @@ Allowed placeholders are `${event}`, `${eventId}`, `${story.id}`, `${story.title
 ### Verification evidence
 
 - `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`: clean.
-- `cargo test --workspace --all-targets`: 133 tests across 26 suites passed.
-- `pnpm --dir ui typecheck` and `pnpm --dir ui build`: passed; renderer 253/253 statements static.
-- `cargo xtask verify-renderer`: stripped WASM 656,326 bytes; 6 resource-limit tests and 12 renderer view/determinism/escaping tests passed.
-- Playwright: 6/6 passed on isolated ports, including JavaScript-disabled Reader pairing, responsive navigation, theme persistence, typed original/discussion links, UI-created body template, Favorite delivery, idempotency header, and captured JSON payload.
+- `cargo test --workspace --all-targets`: 137 tests across 26 suites passed.
+- `pnpm --dir ui typecheck` and `pnpm --dir ui build`: passed; renderer 241/241 statements static.
+- `cargo xtask verify-renderer`: stripped WASM 626,067 bytes; 6 resource-limit tests and 12 renderer view/determinism/escaping tests passed.
+- Playwright: 8/8 passed on isolated ports, including JavaScript-disabled Reader pairing, responsive navigation, theme persistence, typed original/discussion links, encrypted per-user headers, stream drag/reorder, account-menu scroll behavior, and admin/model tabs.
 - `cargo xtask build-release`, packaged `rill doctor`, and `cargo xtask measure`: passed.
 - Before/after screenshots, accessibility trees, annotations, and objective measurements are ignored runtime artifacts linked from [visual-audit.md](visual-audit.md).
 
 ### Live Karakeep evidence
 
-On 2026-08-19 the generic action was created through `/settings/readers` as `POST https://keep.srsatt.dev/api/v1/bookmarks`, using the documented JSON template and an `Authorization` header sourced in-process from the named `KARAKEEP_API_TOKEN` environment variable. The UI confirmed that the custom body was configured and private headers were encrypted; no token value entered browser state, command arguments, logs, or this report.
+On 2026-08-19 the generic action was created through `/settings/readers` as `POST https://keep.srsatt.dev/api/v1/bookmarks`, using the documented JSON template and an encrypted `Authorization` header. The UI confirmed that the custom body was configured and private headers were encrypted; no token value entered logs or this report. The current form accepts that value directly as a per-user secret instead of asking for a server environment-variable name.
 
 The normal Favorite UI delivered story `892844e2-77db-4e5e-98e4-80282dd48d12`, whose canonical URL is `http://127.0.0.1:3014/article/visual-audit-11`. Execution `5d416b66-b7cb-4e1e-86f1-3d7619f6ef85` succeeded on attempt 1 with a 2xx response. Repeating the same Favorite delivery created execution `359c4b14-d926-44fa-ba57-8c28b56db87b`, which also succeeded on attempt 1 with a 2xx response.
 
@@ -82,7 +82,7 @@ renderer.js -> SCRIPTC_CC=zigcc + SCRIPTC_TARGET=wasm32-wasi
 Rust workspace -> thin-LTO stripped rill executable
 ```
 
-The 2026-08-19 verification compiled 253/253 renderer statements statically with no
+The 2026-08-19 verification compiled 241/241 renderer statements statically with no
 dynamic remainder. At runtime `rill-renderer-host` writes one versioned JSON
 request to controlled WASI stdin, invokes `_start` under epoch, fuel, memory,
 input, and output limits, reads controlled stdout, and validates the versioned
@@ -117,18 +117,18 @@ every curator path. Generated summary text never overwrites curator commentary.
 
 | Measurement | Actual value |
 |---|---:|
-| release executable | 27,434,432 bytes |
-| renderer WASM | 656,326 bytes |
-| modern initial JS | 48,409 raw / 14,795 Brotli bytes |
+| release executable | 27,483,392 bytes |
+| renderer WASM | 626,067 bytes |
+| modern initial JS | 47,399 raw / 14,454 Brotli bytes |
 | reader JS | no artifact or script tag; 0 bytes |
-| cold startup to ready | 142.0 ms |
-| idle RSS | 199,786,496 bytes (190.53 MiB) |
-| max RSS after 100 SSR renders | 200,933,376 bytes (191.63 MiB) |
-| max RSS during RSS ingestion | 204,832,768 bytes (195.34 MiB) |
-| max RSS during 25-link expansion | 204,832,768 bytes (195.34 MiB) |
-| max sampled macOS physical footprint | 79,971,024 bytes (76.27 MiB) |
-| peak macOS physical footprint | 205,685,384 bytes (196.16 MiB) |
-| fixture SQLite database | 778,240 bytes |
+| cold startup to ready | 83.3 ms |
+| idle RSS | 204,259,328 bytes (194.80 MiB) |
+| max RSS after 100 SSR renders | 205,471,744 bytes (195.95 MiB) |
+| max RSS during RSS ingestion | 208,994,304 bytes (199.31 MiB) |
+| max RSS during 25-link expansion | 209,158,144 bytes (199.47 MiB) |
+| max sampled macOS physical footprint | 87,376,592 bytes (83.33 MiB) |
+| peak macOS physical footprint | 205,832,864 bytes (196.30 MiB) |
+| fixture SQLite database | 946,176 bytes |
 
 Exact method and scope: [resource-measurements.md](resource-measurements.md).
 

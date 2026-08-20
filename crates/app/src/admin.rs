@@ -301,6 +301,47 @@ pub(crate) async fn api_put_model(
     }
 }
 
+pub(crate) async fn api_test_model(
+    State(state): State<AppState>,
+    Path(slot): Path<String>,
+    headers: HeaderMap,
+    Json(mut request): Json<ModelSettingInput>,
+) -> Response {
+    let principal = match write_admin(&state, &headers).await {
+        Ok(principal) => principal,
+        Err(response) => return response,
+    };
+    if !allow_admin_mutation(&state, &principal.user.id) {
+        return api_error(StatusCode::TOO_MANY_REQUESTS, "admin rate limit exceeded");
+    }
+    let api_key = request.api_key.take().map(Zeroizing::new);
+    let settings = state.global_settings.clone();
+    let requested_slot = slot.clone();
+    let registry = match tokio::task::spawn_blocking(move || {
+        settings.test_model(
+            &requested_slot,
+            &request,
+            api_key.as_deref().map(String::as_str),
+        )
+    })
+    .await
+    {
+        Ok(Ok(registry)) => registry,
+        Ok(Err(error)) => {
+            tracing::warn!(error = %error, slot = %slot, "model test configuration rejected");
+            return api_error(StatusCode::BAD_REQUEST, "invalid model setting");
+        }
+        Err(_) => return api_error(StatusCode::INTERNAL_SERVER_ERROR, "model test unavailable"),
+    };
+    match registry.health(&slot).await {
+        Ok(health) => no_store(Json(health).into_response()),
+        Err(error) => {
+            tracing::warn!(error = %error, slot = %slot, "model test failed");
+            api_error(StatusCode::BAD_GATEWAY, "model test failed")
+        }
+    }
+}
+
 pub(crate) async fn api_delete_model(
     State(state): State<AppState>,
     Path(slot): Path<String>,

@@ -32,6 +32,15 @@ renderer instantiation, and database access before rollout.
 The optional `deploy/Containerfile` packages already-built, architecture-matched
 artifacts. It is intentionally not a frontend/Rust build environment.
 
+```bash
+cargo xtask build-release
+docker build -f deploy/Containerfile -t rill:poc .
+```
+
+The PoC publishes source only. Publish a registry image after CI builds and
+tests both `linux/amd64` and `linux/arm64`; a locally packaged image is useful
+for self-hosting but is not a portable release artifact.
+
 ## Backup
 
 SQLite WAL files cannot be copied independently. Prefer Rill's consistent
