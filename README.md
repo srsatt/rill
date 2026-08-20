@@ -130,5 +130,6 @@ reader build intentionally emits no referenced JavaScript.
 - [OpenAPI](docs/openapi.yaml)
 - [Resource measurements](docs/resource-measurements.md)
 - [Implementation report](docs/implementation-report.md)
+- [Alpha release plan](docs/alpha-release-plan.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Contributing](CONTRIBUTING.md)

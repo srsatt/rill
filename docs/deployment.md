@@ -36,10 +36,10 @@ frontend/Rust build environment.
 
 ```bash
 cargo xtask build-release
-docker build -f deploy/Containerfile -t rill:poc .
+docker build -f deploy/Containerfile -t rill:alpha .
 ```
 
-The PoC publishes source only. Publish a registry image after CI builds and
+The alpha publishes source only. Publish a registry image after CI builds and
 tests both `linux/amd64` and `linux/arm64`; a locally packaged image is useful
 for self-hosting but is not a portable release artifact.
 

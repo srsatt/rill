@@ -21,10 +21,10 @@ Allowed placeholders are `${event}`, `${eventId}`, `${story.id}`, `${story.title
 ### Verification evidence
 
 - `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`: clean.
-- `cargo test --workspace --all-targets`: 137 tests across 26 suites passed.
-- `pnpm --dir ui typecheck` and `pnpm --dir ui build`: passed; renderer 241/241 statements static.
-- `cargo xtask verify-renderer`: stripped WASM 626,067 bytes; 6 resource-limit tests and 12 renderer view/determinism/escaping tests passed.
-- Playwright: 8/8 passed on isolated ports, including JavaScript-disabled Reader pairing, responsive navigation, theme persistence, typed original/discussion links, encrypted per-user headers, stream drag/reorder, account-menu scroll behavior, and admin/model tabs.
+- `cargo test --workspace --all-targets`: 147 tests across 26 suites passed.
+- `pnpm --dir ui typecheck` and `pnpm --dir ui build`: passed; renderer 255/255 statements static.
+- `cargo xtask verify-renderer`: stripped WASM 588,632 bytes; 6 resource-limit tests and 14 renderer view/determinism/escaping tests passed.
+- Playwright: 10/10 passed on isolated ports, including JavaScript-disabled Reader pairing, responsive navigation, theme persistence, typed original/discussion links, encrypted per-user headers, stream drag/reorder, account-menu scroll behavior, and admin/model tabs.
 - `cargo xtask build-release`, packaged `rill doctor`, and `cargo xtask measure`: passed.
 - Before/after screenshots, accessibility trees, annotations, and objective measurements are ignored runtime artifacts linked from [visual-audit.md](visual-audit.md).
 
@@ -83,7 +83,7 @@ renderer.js -> SCRIPTC_CC=zigcc + SCRIPTC_TARGET=wasm32-wasi
 Rust workspace -> thin-LTO stripped rill executable
 ```
 
-The 2026-08-20 verification compiled 241/241 renderer statements statically with no
+The 2026-08-20 verification compiled 255/255 renderer statements statically with no
 dynamic remainder. At runtime `rill-renderer-host` writes one versioned JSON
 request to controlled WASI stdin, invokes `_start` under epoch, fuel, memory,
 input, and output limits, reads controlled stdout, and validates the versioned
@@ -118,20 +118,20 @@ every curator path. Generated summary text never overwrites curator commentary.
 
 | Measurement | Actual value |
 |---|---:|
-| release executable | 24,922,160 bytes |
-| renderer compiler-input WASM | 623,400 bytes |
-| renderer AOT module | 2,252,544 bytes |
-| deployed executable + renderer | 27,174,704 bytes |
-| modern initial JS | 47,226 raw / 14,421 Brotli bytes |
+| release executable | 24,922,176 bytes |
+| renderer compiler-input WASM | 588,632 bytes |
+| renderer AOT module | 2,122,008 bytes |
+| deployed executable + renderer | 27,044,184 bytes |
+| modern initial JS | 48,156 raw / 14,664 Brotli bytes |
 | reader JS | no artifact or script tag; 0 bytes |
 | cold startup to ready | 29.7 ms |
-| idle RSS | 18,825,216 bytes (17.95 MiB) |
-| max RSS after 100 SSR renders | 20,873,216 bytes (19.91 MiB) |
-| max RSS during RSS ingestion | 25,509,888 bytes (24.33 MiB) |
-| max RSS during 25-link expansion | 25,509,888 bytes (24.33 MiB) |
-| max sampled macOS physical footprint | 8,405,544 bytes (8.02 MiB) |
-| peak macOS physical footprint | 8,405,544 bytes (8.02 MiB) |
-| fixture SQLite database | 782,336 bytes |
+| idle RSS | 18,694,144 bytes (17.83 MiB) |
+| max RSS after 100 SSR renders | 20,201,472 bytes (19.27 MiB) |
+| max RSS during RSS ingestion | 24,985,600 bytes (23.83 MiB) |
+| max RSS during 25-link expansion | 25,067,520 bytes (23.91 MiB) |
+| max sampled macOS physical footprint | 8,454,696 bytes (8.06 MiB) |
+| peak macOS physical footprint | 8,454,696 bytes (8.06 MiB) |
+| fixture SQLite database | 794,624 bytes |
 
 Exact method and scope: [resource-measurements.md](resource-measurements.md).
 

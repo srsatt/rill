@@ -1,3 +1,3 @@
 # Backlog
 
-No open product backlog items block the PoC. Release preparation is tracked in [poc-release-plan.md](poc-release-plan.md).
+No open product backlog items block the alpha release. Release preparation is tracked in [alpha-release-plan.md](alpha-release-plan.md).

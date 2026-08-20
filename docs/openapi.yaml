@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Rill API
-  version: 0.1.0
+  version: 0.1.0-alpha.1
   description: Browser-oriented JSON API. Unsafe authenticated operations also require an exact same-origin request and X-CSRF-Token.
 servers:
   - url: /api/v1

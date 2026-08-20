@@ -31,33 +31,33 @@ and workload immediately before and after the change.
 
 | Measurement | Runtime compilation | AOT renderer | Change |
 |---|---:|---:|---:|
-| stripped release executable | 27,533,200 bytes | 24,922,160 bytes | -9.5% |
-| deployed executable + renderer | 28,156,600 bytes | 27,174,704 bytes | -3.5% |
+| stripped release executable | 27,533,200 bytes | 24,922,176 bytes | -9.5% |
+| deployed executable + renderer | 28,156,600 bytes | 27,044,184 bytes | -4.0% |
 | cold process start through `/health/ready` | 87.5 ms | 29.7 ms | -66.1% |
-| idle service RSS after readiness | 226,148,352 bytes (215.67 MiB) | 18,825,216 bytes (17.95 MiB) | -91.7% |
-| maximum RSS across 100 sequential Solid SSR renders | 227,328,000 bytes (216.80 MiB) | 20,873,216 bytes (19.91 MiB) | -90.8% |
-| maximum RSS during normal RSS fixture ingestion | 231,079,936 bytes (220.38 MiB) | 25,509,888 bytes (24.33 MiB) | -89.0% |
-| maximum RSS during 25-link collection expansion | 231,079,936 bytes (220.38 MiB) | 25,509,888 bytes (24.33 MiB) | -89.0% |
-| maximum sampled macOS physical footprint | 107,807,488 bytes (102.81 MiB) | 8,405,544 bytes (8.02 MiB) | -92.2% |
-| peak macOS physical footprint since process start | 195,347,152 bytes (186.30 MiB) | 8,405,544 bytes (8.02 MiB) | -95.7% |
+| idle service RSS after readiness | 226,148,352 bytes (215.67 MiB) | 18,694,144 bytes (17.83 MiB) | -91.7% |
+| maximum RSS across 100 sequential Solid SSR renders | 227,328,000 bytes (216.80 MiB) | 20,201,472 bytes (19.27 MiB) | -91.1% |
+| maximum RSS during normal RSS fixture ingestion | 231,079,936 bytes (220.38 MiB) | 24,985,600 bytes (23.83 MiB) | -89.2% |
+| maximum RSS during 25-link collection expansion | 231,079,936 bytes (220.38 MiB) | 25,067,520 bytes (23.91 MiB) | -89.2% |
+| maximum sampled macOS physical footprint | 107,807,488 bytes (102.81 MiB) | 8,454,696 bytes (8.06 MiB) | -92.2% |
+| peak macOS physical footprint since process start | 195,347,152 bytes (186.30 MiB) | 8,454,696 bytes (8.06 MiB) | -95.7% |
 
-The raw stripped renderer is 623,400 bytes. Its architecture-specific AOT
-artifact is 2,252,544 bytes. Removing unused Wasmtime defaults saves 2,611,040
+The raw stripped renderer is 588,632 bytes. Its architecture-specific AOT
+artifact is 2,122,008 bytes. Removing unused Wasmtime defaults saves 2,611,024
 bytes from the executable; the larger AOT artifact leaves the deployed native
-runtime plus renderer 981,896 bytes smaller overall.
+runtime plus renderer 1,112,416 bytes smaller overall.
 
 ## Where RSS is spent after AOT
 
 | Runtime phase | Observed peak RSS | Increase over idle |
 |---|---:|---:|
-| ready and idle | 17.95 MiB | - |
-| 100 sequential SSR renders | 19.91 MiB | 1.95 MiB |
-| RSS fixture ingestion | 24.33 MiB | 6.38 MiB |
-| 25-link collection expansion | 24.33 MiB | 6.38 MiB |
+| ready and idle | 17.83 MiB | - |
+| 100 sequential SSR renders | 19.27 MiB | 1.44 MiB |
+| RSS fixture ingestion | 23.83 MiB | 6.00 MiB |
+| 25-link collection expansion | 23.91 MiB | 6.08 MiB |
 
 The old startup compilation accounted for almost all observed peak memory: AOT
-removed 177.65 MiB from the measured physical peak. Later SSR added 1.95 MiB
-RSS over idle; ingestion and collection work peaked 6.38 MiB over idle.
+removed 178.23 MiB from the measured physical peak. Later SSR added 1.44 MiB
+RSS over idle; ingestion and collection work peaked 6.08 MiB over idle.
 
 The runtime executable still includes Cranelift for safe validation and
 compilation of untrusted source-plugin Components during admin installation.
