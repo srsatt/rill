@@ -18,4 +18,17 @@ mod tests {
     fn rejects_unknown_keys() {
         assert!(toml::from_str::<Settings>("mystery = true").is_err());
     }
+
+    #[test]
+    fn custom_model_ca_requires_https() {
+        let settings: Settings = toml::from_str(
+            r#"[models.summary]
+base_url = "http://127.0.0.1:11434/v1/"
+ca_certificate_path = "/etc/rill/model-ca.crt"
+"#,
+        )
+        .unwrap();
+
+        assert!(settings.validate().unwrap_err().to_string().contains("ca_certificate_path"));
+    }
 }

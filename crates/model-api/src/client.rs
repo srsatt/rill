@@ -18,9 +18,15 @@ impl BoundedJsonClient {
             let path = format!("{}/", config.base_url.path());
             config.base_url.set_path(&path);
         }
-        let client = Client::builder()
+        let mut client = Client::builder()
             .timeout(config.timeout)
-            .redirect(reqwest::redirect::Policy::none())
+            .redirect(reqwest::redirect::Policy::none());
+        if let Some(pem) = config.root_certificate_pem.as_deref() {
+            let certificate = reqwest::Certificate::from_pem(pem)
+                .map_err(|error| ModelError::Request(error.to_string()))?;
+            client = client.add_root_certificate(certificate);
+        }
+        let client = client
             .build()
             .map_err(|error| ModelError::Request(error.to_string()))?;
         Ok(Self {

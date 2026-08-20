@@ -389,6 +389,7 @@ impl StoredModelConfig {
             model: self.model.clone(),
             version: self.version.clone(),
             api_key_env: None,
+            ca_certificate_path: None,
             timeout_seconds: self.timeout_seconds,
             maximum_request_bytes: self.maximum_request_bytes,
             maximum_response_bytes: self.maximum_response_bytes,

@@ -28,6 +28,7 @@ provider = "ollama"
 model = "gemma4:e4b"
 version = "operator-pinned"
 api_key_env = "RILL_MODEL_API_KEY"
+ca_certificate_path = "/etc/rill/model-ca.crt"
 timeout_seconds = 30
 maximum_request_bytes = 524288
 maximum_response_bytes = 4194304
@@ -36,6 +37,9 @@ retries = 2
 circuit_failure_threshold = 3
 circuit_cooldown_seconds = 30
 ```
+
+`ca_certificate_path` adds one PEM trust anchor only to that provider's HTTPS
+client. Use it for a private model gateway without changing system trust.
 
 The admin global-settings page manages three live slots: `embedding`, `ranking`,
 and `text_parse`. The text-parse slot powers both summaries and collection

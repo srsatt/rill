@@ -271,6 +271,7 @@ pub struct HttpModelSettings {
     pub model: String,
     pub version: String,
     pub api_key_env: Option<String>,
+    pub ca_certificate_path: Option<PathBuf>,
     pub timeout_seconds: u64,
     pub maximum_request_bytes: usize,
     pub maximum_response_bytes: usize,
@@ -288,6 +289,7 @@ impl Default for HttpModelSettings {
             model: "model".into(),
             version: "configured".into(),
             api_key_env: None,
+            ca_certificate_path: None,
             timeout_seconds: 30,
             maximum_request_bytes: 512 * 1024,
             maximum_response_bytes: 4 * 1024 * 1024,
@@ -325,6 +327,15 @@ impl HttpModelSettings {
         {
             return Err(ConfigError::Invalid(format!(
                 "models.{name} identity or limits are invalid"
+            )));
+        }
+        if self
+            .ca_certificate_path
+            .as_ref()
+            .is_some_and(|path| path.as_os_str().is_empty() || url.scheme() != "https")
+        {
+            return Err(ConfigError::Invalid(format!(
+                "models.{name}.ca_certificate_path requires an absolute HTTPS endpoint"
             )));
         }
         Ok(())

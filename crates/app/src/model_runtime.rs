@@ -1,6 +1,6 @@
 use std::{
     collections::BTreeMap,
-    env,
+    env, fs,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -164,6 +164,13 @@ pub(crate) fn http_model_config(
             .map(|name| env::var(name).with_context(|| format!("model API key {name} is missing")))
             .transpose()?,
     };
+    config.root_certificate_pem = settings
+        .ca_certificate_path
+        .as_ref()
+        .map(|path| {
+            fs::read(path).with_context(|| format!("read model CA certificate {}", path.display()))
+        })
+        .transpose()?;
     config.timeout = Duration::from_secs(settings.timeout_seconds);
     config.maximum_request_bytes = settings.maximum_request_bytes;
     config.maximum_response_bytes = settings.maximum_response_bytes;
@@ -349,5 +356,24 @@ impl CollectionParserProvider for DeterministicCollectionFallback {
             ready: true,
             detail: "deterministic parser ready".into(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configured_model_ca_must_be_readable() {
+        let settings = HttpModelSettings {
+            base_url: "https://model.example/v1/".into(),
+            ca_certificate_path: Some("/definitely/missing/rill-model-ca.crt".into()),
+            ..HttpModelSettings::default()
+        };
+
+        let Err(error) = http_model_config(&settings, None) else {
+            panic!("missing model CA unexpectedly loaded");
+        };
+        assert!(error.to_string().contains("read model CA certificate"));
     }
 }
