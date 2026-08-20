@@ -21,13 +21,15 @@ exact helpers emitted by Rill's component set. Require:
 - renderer determinism and escaping tests
 - browser hydration and root-preservation tests
 - Wasmtime capability and resource limits
+- build-time Wasmtime AOT compilation after stripping; runtime loads only the
+  trusted, architecture-matched serialized module
 
 Strip non-runtime WASM custom sections after compilation. Preserve every runtime
 section and rerun renderer tests against stripped artifact.
 
 ## Consequences
 
-Rill has no embedded JavaScript engine. Shared TSX remains source of truth.
+Rill has no embedded JavaScript engine, and renderer startup performs no Wasm
+translation or code generation. Shared TSX remains source of truth.
 Adding unsupported Solid SSR features requires explicit adapter work and fails
 coverage/tests rather than silently adding a runtime.
-

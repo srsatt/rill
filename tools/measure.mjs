@@ -8,7 +8,8 @@ import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const binary = join(root, "target/release/rill");
-const renderer = join(root, "artifacts/ui-renderer.wasm");
+const rendererWasm = join(root, "artifacts/ui-renderer.wasm");
+const renderer = join(root, "artifacts/ui-renderer.cwasm");
 const staticDir = join(root, "ui/dist/client");
 const rendererSource = join(root, "ui/dist/renderer/renderer.js");
 for (const path of [binary, renderer, join(staticDir, ".vite/manifest.json")]) {
@@ -185,7 +186,9 @@ try {
   const databaseBytes = statSync(database).size;
 
   console.log(`release executable: ${statSync(binary).size} bytes`);
-  console.log(`renderer WASM: ${statSync(renderer).size} bytes`);
+  console.log(`renderer compiler-input WASM: ${statSync(rendererWasm).size} bytes`);
+  console.log(`renderer AOT module: ${statSync(renderer).size} bytes`);
+  console.log(`deployed native runtime + renderer: ${statSync(binary).size + statSync(renderer).size} bytes`);
   console.log(`renderer Vite source: ${statSync(rendererSource).size} bytes`);
   console.log(`modern initial JS: ${modern.raw} raw, ${modern.gzip} gzip-9, ${modern.brotli} Brotli bytes`);
   console.log(`reader JS: ${reader.raw} raw, ${reader.gzip} gzip-9, ${reader.brotli} Brotli bytes`);

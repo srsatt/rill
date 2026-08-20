@@ -6,7 +6,7 @@ RUN apt-get update \
     && useradd --system --home /var/lib/rill --create-home rill
 
 COPY target/release/rill /opt/rill/rill
-COPY artifacts/ui-renderer.wasm /opt/rill/ui-renderer.wasm
+COPY artifacts/ui-renderer.cwasm /opt/rill/ui-renderer.cwasm
 COPY ui/dist/client /opt/rill/static
 COPY config/example.toml /etc/rill/config.toml
 
@@ -18,7 +18,7 @@ WORKDIR /var/lib/rill
 ENV RILL_BIND=0.0.0.0:3000 \
     RILL_DATABASE_PATH=/var/lib/rill/rill.db \
     RILL_STATIC_DIR=/opt/rill/static \
-    RILL_RENDERER_WASM=/opt/rill/ui-renderer.wasm
+    RILL_RENDERER_WASM=/opt/rill/ui-renderer.cwasm
 EXPOSE 3000
 VOLUME ["/var/lib/rill"]
 ENTRYPOINT ["/opt/rill/rill", "--config", "/etc/rill/config.toml"]

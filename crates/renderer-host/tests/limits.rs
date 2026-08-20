@@ -1,10 +1,11 @@
 use std::{io::Write, time::Duration};
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use rill_contracts::{RENDER_PROTOCOL_VERSION, RenderMode, RenderRequest};
 use rill_renderer_host::{RenderError, Renderer, RendererLimits, WasiRenderer};
 use serde_json::json;
 use tempfile::NamedTempFile;
+use wasmtime::{Config, Engine};
 
 fn request() -> RenderRequest {
     RenderRequest {
@@ -20,8 +21,16 @@ fn request() -> RenderRequest {
 }
 
 fn renderer_from_wat(source: &str, limits: RendererLimits) -> Result<WasiRenderer> {
+    let wasm = wat::parse_str(source)?;
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    config.epoch_interruption(true);
+    let engine = Engine::new(&config).map_err(|error| anyhow!(error.to_string()))?;
+    let compiled = engine
+        .precompile_module(&wasm)
+        .map_err(|error| anyhow!(error.to_string()))?;
     let mut file = NamedTempFile::new()?;
-    file.write_all(&wat::parse_str(source)?)?;
+    file.write_all(&compiled)?;
     Ok(WasiRenderer::load(file.path(), limits)?)
 }
 

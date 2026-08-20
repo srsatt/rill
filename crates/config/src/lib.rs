@@ -100,7 +100,7 @@ impl Default for AssetSettings {
     fn default() -> Self {
         Self {
             static_dir: PathBuf::from("ui/dist/client"),
-            renderer_wasm: PathBuf::from("artifacts/ui-renderer.wasm"),
+            renderer_wasm: PathBuf::from("artifacts/ui-renderer.cwasm"),
             plugin_dir: PathBuf::from("plugins"),
         }
     }

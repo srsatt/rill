@@ -407,7 +407,7 @@ fn read_admin_password() -> Result<String> {
 }
 
 fn doctor(settings: &Settings) -> Result<()> {
-    require_file(&settings.assets.renderer_wasm, "renderer WASM")?;
+    require_file(&settings.assets.renderer_wasm, "renderer AOT module")?;
     require_directory(&settings.assets.static_dir, "static asset")?;
     let limits = RendererLimits {
         fuel: settings.renderer.fuel,

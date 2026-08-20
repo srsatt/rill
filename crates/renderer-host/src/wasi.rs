@@ -31,8 +31,10 @@ impl WasiRenderer {
 
         let engine =
             Arc::new(Engine::new(&config).map_err(|error| RenderError::Load(error.to_string()))?);
-        let module = Module::from_file(&engine, path)
-            .map_err(|error| RenderError::Load(error.to_string()))?;
+        // SAFETY: deployment supplies the immutable artifact emitted by `cargo xtask`.
+        // The build replaces it atomically, so a mapped artifact is never modified in place.
+        let module = unsafe { Module::deserialize_file(&engine, path) }
+            .map_err(|error| RenderError::Load(format!("{error:#}")))?;
         let weak_engine = Arc::downgrade(&engine);
         thread::spawn(move || {
             loop {

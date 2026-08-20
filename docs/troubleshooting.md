@@ -1,6 +1,6 @@
 # Troubleshooting
 
-- `rill doctor` fails: verify config paths, file permissions, renderer WASM,
+- `rill doctor` fails: verify config paths, file permissions, renderer AOT module,
   static manifest, SQLite directory ownership, and all required environment
   variables.
 - `health/live` works but `health/ready` returns 503: SQLite cannot lease a

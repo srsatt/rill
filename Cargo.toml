@@ -71,8 +71,8 @@ url = "2.5.8"
 uuid = { version = "1.18.1", features = ["v4"] }
 wasm-encoder = "0.252.0"
 wasmparser = "0.252.0"
-wasmtime = "47.0.3"
-wasmtime-wasi = "47.0.3"
+wasmtime = { version = "47.0.3", default-features = false, features = ["component-model-async", "runtime", "std"] }
+wasmtime-wasi = { version = "47.0.3", default-features = false, features = ["p1"] }
 wat = "1.256.0"
 webpki-roots = "1.0.5"
 zeroize = "1.9.0"

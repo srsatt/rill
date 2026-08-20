@@ -10,7 +10,7 @@ busy_timeout_ms = 5000
 
 [assets]
 static_dir = "/opt/rill/static"
-renderer_wasm = "/opt/rill/ui-renderer.wasm"
+renderer_wasm = "/opt/rill/ui-renderer.cwasm"
 plugin_dir = "/opt/rill/plugins"
 
 [auth]

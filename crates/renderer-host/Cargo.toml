@@ -15,4 +15,5 @@ wasmtime-wasi.workspace = true
 [dev-dependencies]
 anyhow.workspace = true
 tempfile.workspace = true
+wasmtime = { workspace = true, features = ["cranelift"] }
 wat.workspace = true
