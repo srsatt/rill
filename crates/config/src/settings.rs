@@ -56,6 +56,23 @@ impl Settings {
                 "http.public_base_url must use http or https and include a host".to_owned(),
             ));
         }
+        for value in &self.http.trusted_origins {
+            let url = Url::parse(value).map_err(|error| {
+                ConfigError::Invalid(format!("http.trusted_origins contains an invalid URL: {error}"))
+            })?;
+            if !matches!(url.scheme(), "http" | "https")
+                || url.host_str().is_none()
+                || url.path() != "/"
+                || url.query().is_some()
+                || url.fragment().is_some()
+                || !url.username().is_empty()
+                || url.password().is_some()
+            {
+                return Err(ConfigError::Invalid(
+                    "http.trusted_origins entries must be HTTP(S) origins without credentials, paths, queries, or fragments".to_owned(),
+                ));
+            }
+        }
         if self.database.pool_size == 0 || self.database.pool_size > 32 {
             return Err(ConfigError::Invalid(
                 "database.pool_size must be between 1 and 32".to_owned(),

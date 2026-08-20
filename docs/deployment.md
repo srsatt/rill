@@ -72,6 +72,9 @@ metadata and bodies.
    service and verify `/health/ready`, login, one source poll, and decryption of
    one configured credential.
 
+When one deployment has multiple browser hostnames, keep the canonical URL in
+`http.public_base_url` and list the other exact origins in `http.trusted_origins`.
+
 Changing the master key without re-encrypting every secret makes encrypted
 Telegram, email, plugin, and Action credentials unreadable. Automated key
 rotation is not yet implemented.

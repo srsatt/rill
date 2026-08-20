@@ -31,4 +31,14 @@ ca_certificate_path = "/etc/rill/model-ca.crt"
 
         assert!(settings.validate().unwrap_err().to_string().contains("ca_certificate_path"));
     }
+
+    #[test]
+    fn trusted_origins_reject_paths() {
+        let settings: Settings = toml::from_str(
+            "[http]\ntrusted_origins = [\"https://rill.example/path\"]",
+        )
+        .unwrap();
+
+        assert!(settings.validate().unwrap_err().to_string().contains("trusted_origins"));
+    }
 }

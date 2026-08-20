@@ -51,6 +51,7 @@ include!("settings.rs");
 pub struct HttpSettings {
     pub bind: String,
     pub public_base_url: String,
+    pub trusted_origins: Vec<String>,
     pub secure_cookies: bool,
 }
 
@@ -59,6 +60,7 @@ impl Default for HttpSettings {
         Self {
             bind: "127.0.0.1:3000".to_owned(),
             public_base_url: "http://127.0.0.1:3000".to_owned(),
+            trusted_origins: Vec::new(),
             secure_cookies: false,
         }
     }

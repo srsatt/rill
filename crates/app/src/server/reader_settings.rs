@@ -80,7 +80,7 @@ async fn reader_story_feedback(
     headers: HeaderMap,
     Form(form): Form<ReaderFeedbackForm>,
 ) -> Response {
-    if !valid_origin(&headers, &state.public_origin) {
+    if !valid_origin(&headers, &state.trusted_origins) {
         return api_error(StatusCode::FORBIDDEN, "origin rejected");
     }
     let principal = match reader_or_browser_write_principal(&state, &headers, &form.csrf_token).await {
@@ -145,7 +145,7 @@ async fn reader_pair_form(
     headers: HeaderMap,
     Form(form): Form<PairForm>,
 ) -> Response {
-    if !valid_origin(&headers, &state.public_origin)
+    if !valid_origin(&headers, &state.trusted_origins)
         || !constant_time_equal(
             cookie(&headers, pair_csrf_cookie()).as_deref(),
             &form.csrf_token,
@@ -215,7 +215,7 @@ async fn settings_pair_reader(
     headers: HeaderMap,
     Form(form): Form<PairDeviceForm>,
 ) -> Response {
-    if !valid_origin(&headers, &state.public_origin) {
+    if !valid_origin(&headers, &state.trusted_origins) {
         return api_error(StatusCode::FORBIDDEN, "origin rejected");
     }
     let principal = match browser_principal(&state, &headers).await {
@@ -262,7 +262,7 @@ async fn settings_change_password(
     headers: HeaderMap,
     Form(form): Form<PasswordForm>,
 ) -> Response {
-    if !valid_origin(&headers, &state.public_origin) {
+    if !valid_origin(&headers, &state.trusted_origins) {
         return api_error(StatusCode::FORBIDDEN, "origin rejected");
     }
     let principal = match browser_principal(&state, &headers).await {
@@ -303,7 +303,7 @@ async fn settings_revoke_reader(
     headers: HeaderMap,
     Form(form): Form<CsrfForm>,
 ) -> Response {
-    if !valid_origin(&headers, &state.public_origin) {
+    if !valid_origin(&headers, &state.trusted_origins) {
         return api_error(StatusCode::FORBIDDEN, "origin rejected");
     }
     let principal = match browser_principal(&state, &headers).await {

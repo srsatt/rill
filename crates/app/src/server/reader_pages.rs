@@ -57,7 +57,7 @@ async fn login_form(
     headers: HeaderMap,
     Form(form): Form<LoginForm>,
 ) -> Response {
-    if !valid_origin(&headers, &state.public_origin) {
+    if !valid_origin(&headers, &state.trusted_origins) {
         return api_error(StatusCode::FORBIDDEN, "origin rejected");
     }
     let rate_key = peer.ip().to_string();

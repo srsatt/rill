@@ -3,7 +3,7 @@ async fn api_create_pairing_code(
     headers: HeaderMap,
     Json(request): Json<PairDeviceRequest>,
 ) -> Response {
-    if !valid_origin(&headers, &state.public_origin) {
+    if !valid_origin(&headers, &state.trusted_origins) {
         return api_error(StatusCode::FORBIDDEN, "origin rejected");
     }
     let principal = match browser_principal(&state, &headers).await {
@@ -69,7 +69,7 @@ async fn api_revoke_reader_device(
     Path(device_id): Path<String>,
     headers: HeaderMap,
 ) -> Response {
-    if !valid_origin(&headers, &state.public_origin) {
+    if !valid_origin(&headers, &state.trusted_origins) {
         return api_error(StatusCode::FORBIDDEN, "origin rejected");
     }
     let principal = match browser_principal(&state, &headers).await {
@@ -95,4 +95,3 @@ async fn api_revoke_reader_device(
         }
     }
 }
-

@@ -81,7 +81,7 @@ pub(crate) struct AppState {
     connector_context: ConnectorContext,
     secrets: Option<SecretStore>,
     pub(crate) telegram: TelegramIntegration,
-    public_origin: String,
+    trusted_origins: Vec<String>,
     secure_cookies: bool,
     login_limiter: AttemptLimiter,
     pairing_generation_limiter: AttemptLimiter,
@@ -121,7 +121,13 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
         },
     )?;
     let assets = load_assets(&settings.assets.static_dir)?;
-    let public_origin = origin(&Url::parse(&settings.http.public_base_url)?)?;
+    let mut trusted_origins = vec![origin(&Url::parse(&settings.http.public_base_url)?)?];
+    for value in &settings.http.trusted_origins {
+        let candidate = origin(&Url::parse(value)?)?;
+        if !trusted_origins.contains(&candidate) {
+            trusted_origins.push(candidate);
+        }
+    }
     let auth = AuthService::new(
         pool.clone(),
         settings.auth.session_days,
@@ -234,7 +240,7 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
         connector_context,
         secrets,
         telegram,
-        public_origin,
+        trusted_origins,
         secure_cookies: settings.http.secure_cookies,
         login_limiter: AttemptLimiter::default(),
         pairing_generation_limiter: AttemptLimiter::default(),

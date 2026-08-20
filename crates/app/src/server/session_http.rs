@@ -62,7 +62,7 @@ pub(crate) async fn write_principal(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Result<Principal, Response> {
-    if !valid_origin(headers, &state.public_origin) {
+    if !valid_origin(headers, &state.trusted_origins) {
         return Err(api_error(StatusCode::FORBIDDEN, "origin rejected"));
     }
     let principal = browser_principal(state, headers)
@@ -81,7 +81,7 @@ async fn reader_or_browser_write_principal(
     headers: &HeaderMap,
     csrf: &str,
 ) -> Result<Principal, Response> {
-    if !valid_origin(headers, &state.public_origin) {
+    if !valid_origin(headers, &state.trusted_origins) {
         return Err(api_error(StatusCode::FORBIDDEN, "origin rejected"));
     }
     let principal = reader_or_browser_principal(state, headers)
@@ -269,19 +269,19 @@ fn user_agent(headers: &HeaderMap) -> Option<String> {
         .map(str::to_owned)
 }
 
-fn valid_origin(headers: &HeaderMap, expected: &str) -> bool {
+fn valid_origin(headers: &HeaderMap, expected: &[String]) -> bool {
     if let Some(origin) = headers
         .get(header::ORIGIN)
         .and_then(|value| value.to_str().ok())
     {
-        return origin == expected;
+        return expected.iter().any(|candidate| candidate == origin);
     }
     headers
         .get(header::REFERER)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| Url::parse(value).ok())
         .and_then(|url| origin(&url).ok())
-        .is_some_and(|actual| actual == expected)
+        .is_some_and(|actual| expected.contains(&actual))
 }
 
 fn origin(url: &Url) -> Result<String> {

@@ -4,7 +4,7 @@ async fn api_login(
     headers: HeaderMap,
     Json(request): Json<LoginForm>,
 ) -> Response {
-    if !valid_origin(&headers, &state.public_origin) {
+    if !valid_origin(&headers, &state.trusted_origins) {
         return api_error(StatusCode::FORBIDDEN, "origin rejected");
     }
     let rate_key = peer.ip().to_string();
@@ -55,7 +55,7 @@ async fn api_login(
 }
 
 async fn api_logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    if !valid_origin(&headers, &state.public_origin) {
+    if !valid_origin(&headers, &state.trusted_origins) {
         return api_error(StatusCode::FORBIDDEN, "origin rejected");
     }
     let principal = match browser_principal(&state, &headers).await {
@@ -209,4 +209,3 @@ async fn api_collection_control(
         }
     }
 }
-

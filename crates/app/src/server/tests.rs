@@ -9,7 +9,23 @@ mod tests {
             header::ORIGIN,
             HeaderValue::from_static("https://rill.example.evil"),
         );
-        assert!(!valid_origin(&headers, "https://rill.example"));
+        assert!(!valid_origin(&headers, &["https://rill.example".into()]));
+    }
+
+    #[test]
+    fn origin_matching_accepts_configured_aliases() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::ORIGIN,
+            HeaderValue::from_static("https://rill.home.example"),
+        );
+        assert!(valid_origin(
+            &headers,
+            &[
+                "https://rill.example".into(),
+                "https://rill.home.example".into(),
+            ],
+        ));
     }
 
     #[test]
