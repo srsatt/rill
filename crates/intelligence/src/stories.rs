@@ -145,6 +145,15 @@ impl IntelligenceService {
             } else {
                 self.story_topics(&detail.story_id)?
             };
+            let mut source_ids = detail
+                .variants
+                .iter()
+                .chain(std::iter::once(&detail.representative))
+                .flat_map(|variant| variant.curators.iter())
+                .filter_map(|path| path.source_instance_id.clone())
+                .collect::<Vec<_>>();
+            source_ids.sort();
+            source_ids.dedup();
             stories.push(RankedStory {
                 story_id: detail.story_id,
                 document_id: detail.representative.document_id,
@@ -152,7 +161,9 @@ impl IntelligenceService {
                 summary: detail.representative.summary,
                 canonical_url: detail.representative.canonical_url,
                 publisher: detail.representative.publisher,
+                source_ids,
                 published_at: detail.representative.published_at,
+                read: detail.read,
                 coverage: detail.coverage_count,
                 topics,
                 score: 0.0,

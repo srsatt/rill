@@ -25,7 +25,7 @@ export function Admin(props: { page: AdminPageModel }) {
       </div>
 
       {adminSection("users-heading", "users", "Users", "Create accounts and review active access.", <>
-        <form id="user-create" class="admin-form">
+        <form id="user-create" class="admin-form admin-form-columns">
           <label>Username <input name="username" required minLength="3" /></label>
           <label>Email <input name="email" type="email" autocomplete="email" /></label>
           <label>Initial password <input name="password" type="password" required minLength="12" autocomplete="new-password" /></label>

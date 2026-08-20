@@ -16,9 +16,13 @@ const primaryLinks = [
   { href: "/search", label: "Search" },
   { href: "/favorites", label: "Favorites" },
   { href: "/history", label: "History" },
-  { href: "/sources", label: "Sources" },
   { href: "/reader", label: "Reader mode" },
+];
+
+const accountLinks = [
+  { href: "/sources", label: "Sources" },
   { href: "/settings/readers", label: "Settings" },
+  { href: "/admin", label: "Administration" },
 ];
 
 export function ModernShell(props: ModernShellProps) {
@@ -31,6 +35,7 @@ export function ModernShell(props: ModernShellProps) {
     sidebarLinks.push(<li><a href={link.href} aria-current={props.activeHref === link.href ? "page" : undefined}>{link.label}</a></li>);
     mobileLinks.push(<a href={link.href}>{link.label}</a>);
   }
+  for (const link of accountLinks) mobileLinks.push(<a href={link.href}>{link.label}</a>);
   return (
     <div class={`modern-app reading-font-${props.fontFamily === "serif" ? "serif" : "sans"}${props.detail ? " has-detail" : ""}`}>
       <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -94,4 +99,4 @@ export function ModernShell(props: ModernShellProps) {
   );
 }
 
-export { primaryLinks };
+export { accountLinks, primaryLinks };

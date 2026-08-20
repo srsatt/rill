@@ -1,4 +1,4 @@
-type IconName = "bookmark" | "bookmark-check" | "external-link" | "eye" | "eye-off" | "message-circle" | "search" | "thumbs-up" | "thumbs-down";
+type IconName = "bookmark" | "bookmark-check" | "external-link" | "eye" | "eye-off" | "message-circle" | "search" | "send" | "sliders-horizontal" | "thumbs-up" | "thumbs-down";
 
 function Icon(props: { name: IconName }) {
   return <svg class="rill-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -24,6 +24,14 @@ export function MessageCircleIcon() {
 
 export function SearchIcon() {
   return <Icon name="search" />;
+}
+
+export function TelegramIcon() {
+  return <Icon name="send" />;
+}
+
+export function SlidersHorizontalIcon() {
+  return <Icon name="sliders-horizontal" />;
 }
 
 export function EyeIcon() {

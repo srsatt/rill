@@ -1,6 +1,5 @@
 import type { ReaderSettingsPageModel } from "../../generated/render-contract";
 import { ModernShell } from "../components/ModernShell";
-import { card, cardContent, cardHeader } from "../server/solid-ui";
 
 export function ReaderSettings(props: { page: ReaderSettingsPageModel; csrfToken: string }) {
   const defaultTab = props.page.newPairingCode ? "devices" : "experience";
@@ -18,7 +17,8 @@ export function ReaderSettings(props: { page: ReaderSettingsPageModel; csrfToken
         <button type="button" role="tab" id="settings-tab-devices" aria-controls="settings-panel-devices" aria-selected={defaultTab === "devices" ? "true" : "false"} tabindex={defaultTab === "devices" ? "0" : "-1"} data-settings-tab="devices">Devices</button>
       </div>
       <div class="settings-panel" id="settings-panel-experience" role="tabpanel" aria-labelledby="settings-tab-experience" data-settings-panel="experience" hidden={defaultTab !== "experience"}>
-      <section aria-labelledby="experience-heading">{card(<>{cardHeader(<><h2 id="experience-heading">Feed behavior</h2><p class="section-description">Choose how Rill presents and assigns stories for this account.</p></>, "p-0 pb-5")}{cardContent(
+      <section class="settings-form-section" aria-labelledby="experience-heading">
+        <header><h2 id="experience-heading">Feed behavior</h2><p class="section-description">Choose how Rill presents and assigns stories for this account.</p></header>
         <form id="user-preferences" class="admin-form">
           <label class="checkbox-label"><input name="aiFreeMode" type="checkbox" /> AI-free mode</label>
           <p class="field-help">Hide generated summaries and topics, and use deterministic freshness ordering.</p>
@@ -38,7 +38,7 @@ export function ReaderSettings(props: { page: ReaderSettingsPageModel; csrfToken
           <button type="submit" class="primary-action">Save preferences</button>
           <p id="preferences-status" class="field-help" role="status" aria-live="polite"></p>
         </form>
-      , "p-0")}</>, "admin-section")}</section>
+      </section>
       </div>
       <div class="settings-panel" id="settings-panel-streams" role="tabpanel" aria-labelledby="settings-tab-streams" data-settings-panel="streams" hidden>
       <section class="settings-collection" aria-labelledby="streams-heading">
@@ -90,14 +90,15 @@ export function ReaderSettings(props: { page: ReaderSettingsPageModel; csrfToken
       </section>
       </div>
       <div class="settings-panel" id="settings-panel-security" role="tabpanel" aria-labelledby="settings-tab-security" data-settings-panel="security" hidden>
-      <section aria-labelledby="password-heading">{card(<>{cardHeader(<><h2 id="password-heading">Change password</h2><p class="section-description">Changing your password signs out every active session.</p></>, "p-0 pb-5")}{cardContent(
+      <section class="settings-form-section" aria-labelledby="password-heading">
+        <header><h2 id="password-heading">Change password</h2><p class="section-description">Changing your password signs out every active session.</p></header>
         <form method="post" action="/settings/password" class="admin-form">
           <input type="hidden" name="csrf_token" value={props.csrfToken} />
           <label>Current password <input name="old_password" type="password" autocomplete="current-password" required /></label>
           <label>New password <input name="new_password" type="password" autocomplete="new-password" minlength="12" required /></label>
           <button type="submit" class="primary-action">Change password and sign out everywhere</button>
         </form>
-      , "p-0")}</>, "admin-section")}</section>
+      </section>
       </div>
       <div class="settings-panel" id="settings-panel-devices" role="tabpanel" aria-labelledby="settings-tab-devices" data-settings-panel="devices" hidden={defaultTab !== "devices"}>
       <section class="settings-collection" aria-labelledby="devices-heading">

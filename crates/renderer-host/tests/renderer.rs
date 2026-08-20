@@ -63,11 +63,17 @@ fn renders_modern_page_deterministically_and_escapes_content() -> Result<()> {
 
 #[test]
 fn reader_page_contains_safe_form_and_no_hydration_state() -> Result<()> {
-    let response = renderer()?.render(&request("reader-feed", RenderMode::Reader))?;
+    let mut request = request("reader-feed", RenderMode::Reader);
+    request.props["stories"][0]["canonicalUrl"] = json!("https://t.me/genau/42");
+    request.props["stories"][0]["source"] = json!("t.me");
+    let response = renderer()?.render(&request)?;
 
     assert_eq!(response.status, 200);
     assert!(response.body_html.contains("method=\"post\""));
     assert!(response.body_html.contains("csrf&quot;&lt;unsafe>"));
+    assert!(response.body_html.contains("@genau"));
+    assert!(response.body_html.contains("#send"));
+    assert!(!response.body_html.contains(">t.me</a>"));
     assert!(response.hydration_state.is_null());
     Ok(())
 }
@@ -222,7 +228,7 @@ fn renders_every_page_template() -> Result<()> {
             "modern-library",
             RenderMode::Modern,
             json!({ "title": "Favorites", "username": "alice", "kind": "favorites", "query": null, "stories": [] }),
-            "No stories here",
+            "No favorites yet",
         ),
         (
             "modern-sources",

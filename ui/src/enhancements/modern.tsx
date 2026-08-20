@@ -1,8 +1,8 @@
-import { createSignal } from "solid-js";
+import { createSignal, onMount } from "solid-js";
 import { render } from "solid-js/web";
 import type { StoryCardModel, StreamLink } from "../../generated/render-contract";
-import { primaryLinks } from "../components/ModernShell";
-import { BookmarkCheckIcon, BookmarkIcon, EyeIcon, EyeOffIcon, ThumbsDownIcon, ThumbsUpIcon } from "../components/icons";
+import { accountLinks, primaryLinks } from "../components/ModernShell";
+import { BookmarkCheckIcon, BookmarkIcon, EyeIcon, EyeOffIcon, SlidersHorizontalIcon, ThumbsDownIcon, ThumbsUpIcon } from "../components/icons";
 import { StoryCard } from "../components/StoryCard";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
@@ -87,6 +87,9 @@ function MobileNavigation(props: { username: string; streams: StreamLink[]; acti
         )}
         <Separator />
         <p class="sheet-account">Signed in as <strong>{props.username}</strong></p>
+        <nav class="sheet-nav" aria-label="Account">
+          {accountLinks.map(({ href, label }) => <a href={href} aria-current={props.activeHref === href ? "page" : undefined}>{label}</a>)}
+        </nav>
         <div class="theme-picker" aria-label="Theme">
           <span>Theme</span>
           <div class="theme-picker-controls">
@@ -109,12 +112,9 @@ function AccountMenu(props: { username: string }) {
       <DropdownMenuContent class="max-h-[min(24rem,calc(100dvh-1rem))] w-56 overflow-y-auto">
         <DropdownMenuLabel>{props.username}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem as="a" href="/reader">Reader mode</DropdownMenuItem>
-        <DropdownMenuItem as="a" href="/settings/readers">Settings</DropdownMenuItem>
-        <DropdownMenuItem as="a" href="/sources">Sources</DropdownMenuItem>
-        <DropdownMenuItem as="a" href="/admin">Administration</DropdownMenuItem>
+        {accountLinks.map(({ href, label }) => <DropdownMenuItem as="a" href={href} class="pl-8 no-underline">{label}</DropdownMenuItem>)}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Theme</DropdownMenuLabel>
+        <DropdownMenuLabel class="pl-8">Theme</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={theme()} onChange={chooseTheme}>
           <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
@@ -124,6 +124,10 @@ function AccountMenu(props: { username: string }) {
   );
 }
 
+interface FeedSource { id: string; name: string; }
+
+let refreshFeedRows = (): void => {};
+
 function FeedToolbar() {
   const topics = ["All topics", ...Array.from(new Set(
     Array.from(document.querySelectorAll<HTMLElement>("[data-story-id]"))
@@ -132,6 +136,8 @@ function FeedToolbar() {
   const [view, setView] = createSignal("all");
   const [query, setQuery] = createSignal("");
   const [topic, setTopic] = createSignal("All topics");
+  const [sources, setSources] = createSignal<FeedSource[]>([]);
+  const [sourceId, setSourceId] = createSignal("");
   const [sort, setSort] = createSignal("Ranked");
   const [compact, setCompact] = createSignal(false);
 
@@ -144,7 +150,8 @@ function FeedToolbar() {
       const matchesQuery = !normalizedQuery || (row.textContent ?? "").toLocaleLowerCase().includes(normalizedQuery);
       const matchesView = view() !== "unread" || row.dataset.read !== "true";
       const matchesTopic = topic() === "All topics" || (row.dataset.topics ?? "").split(",").includes(topic());
-      row.hidden = !(matchesQuery && matchesView && matchesTopic);
+      const matchesSource = !sourceId() || (row.dataset.sourceIds ?? "").split(",").includes(sourceId());
+      row.hidden = !(matchesQuery && matchesView && matchesTopic && matchesSource);
     }
     list.classList.toggle("compact-stories", compact());
     rows.sort((left, right) => {
@@ -156,48 +163,64 @@ function FeedToolbar() {
       if (item?.parentElement === list) list.append(item);
     }
   };
+  refreshFeedRows = updateRows;
+  onMount(() => {
+    void fetch("/api/v1/sources", { credentials: "same-origin" })
+      .then(async (response) => response.ok ? response.json() as Promise<FeedSource[]> : [])
+      .then(setSources);
+  });
 
   return (
-    <div class="feed-toolbar" aria-label="Story filters">
-      <Tabs value={view()} onChange={(value) => { setView(value); updateRows(); }}>
-        <TabsList aria-label="Story view">
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="unread">Unread</TabsTrigger>
-        </TabsList>
-        <TabsContent value="all" class="sr-only">Showing all stories.</TabsContent>
-        <TabsContent value="unread" class="sr-only">Showing stories not marked read.</TabsContent>
-      </Tabs>
-      <TextField class="feed-search">
-        <TextFieldLabel class="sr-only">Filter stories</TextFieldLabel>
-        <TextFieldInput type="search" placeholder="Filter stories" value={query()} onInput={(event) => { setQuery(event.currentTarget.value); updateRows(); }} />
-      </TextField>
-      <Select<string>
-        options={topics}
-        value={topic()}
-        onChange={(value) => { if (value) setTopic(value); updateRows(); }}
-        class="feed-topic"
-        itemComponent={(itemProps) => <SelectItem item={itemProps.item}>{itemProps.item.rawValue}</SelectItem>}
-      >
-        <SelectLabel class="sr-only">Topic</SelectLabel>
-        <SelectTrigger class="feed-sort"><SelectValue<string>>{(state) => state.selectedOption()}</SelectValue></SelectTrigger>
-        <SelectContent />
-      </Select>
-      <Select<string>
-        options={["Ranked", "Newest"]}
-        value={sort()}
-        onChange={(value) => { if (value) setSort(value); updateRows(); }}
-        class="feed-order"
-        itemComponent={(itemProps) => <SelectItem item={itemProps.item}>{itemProps.item.rawValue}</SelectItem>}
-      >
-        <SelectLabel class="sr-only">Story order</SelectLabel>
-        <SelectTrigger class="feed-sort"><SelectValue<string>>{(state) => state.selectedOption()}</SelectValue></SelectTrigger>
-        <SelectContent />
-      </Select>
-      <Switch checked={compact()} onChange={(value) => { setCompact(value); updateRows(); }} class="compact-switch">
-        <SwitchControl><SwitchThumb /></SwitchControl>
-        <SwitchLabel>Compact</SwitchLabel>
-      </Switch>
-    </div>
+    <details class="feed-filters">
+      <summary aria-label="Filters" title="Filters"><SlidersHorizontalIcon /><span class="sr-only">Filters</span></summary>
+      <div class="feed-filter-panel" aria-label="Story filters">
+          <Tabs class="feed-view-filter" value={view()} onChange={(value) => { setView(value); updateRows(); }}>
+            <TabsList aria-label="Story view">
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="unread">Unread</TabsTrigger>
+            </TabsList>
+            <TabsContent value="all" class="sr-only">Showing all stories.</TabsContent>
+            <TabsContent value="unread" class="sr-only">Showing stories not marked read.</TabsContent>
+          </Tabs>
+          <TextField class="feed-search">
+            <TextFieldLabel class="sr-only">Filter stories</TextFieldLabel>
+            <TextFieldInput type="search" placeholder="Filter stories" value={query()} onInput={(event) => { setQuery(event.currentTarget.value); updateRows(); }} />
+          </TextField>
+          <Select<string>
+            options={topics}
+            value={topic()}
+            onChange={(value) => { if (value) setTopic(value); updateRows(); }}
+            class="feed-topic"
+            itemComponent={(itemProps) => <SelectItem item={itemProps.item}>{itemProps.item.rawValue}</SelectItem>}
+          >
+            <SelectLabel class="sr-only">Topic</SelectLabel>
+            <SelectTrigger class="feed-sort"><SelectValue<string>>{(state) => state.selectedOption()}</SelectValue></SelectTrigger>
+            <SelectContent />
+          </Select>
+          <label class="feed-source">
+            <span class="sr-only">Source</span>
+            <select aria-label="Source" value={sourceId()} onChange={(event) => { setSourceId(event.currentTarget.value); updateRows(); }}>
+              <option value="">All sources</option>
+              {sources().map((source) => <option value={source.id}>{source.name}</option>)}
+            </select>
+          </label>
+          <Select<string>
+            options={["Ranked", "Newest"]}
+            value={sort()}
+            onChange={(value) => { if (value) setSort(value); updateRows(); }}
+            class="feed-order"
+            itemComponent={(itemProps) => <SelectItem item={itemProps.item}>{itemProps.item.rawValue}</SelectItem>}
+          >
+            <SelectLabel class="sr-only">Story order</SelectLabel>
+            <SelectTrigger class="feed-sort"><SelectValue<string>>{(state) => state.selectedOption()}</SelectValue></SelectTrigger>
+            <SelectContent />
+          </Select>
+          <Switch checked={compact()} onChange={(value) => { setCompact(value); updateRows(); }} class="compact-switch">
+            <SwitchControl><SwitchThumb /></SwitchControl>
+            <SwitchLabel>Compact</SwitchLabel>
+          </Switch>
+      </div>
+    </details>
   );
 }
 
@@ -286,6 +309,7 @@ function activateInfiniteFeed(): void {
             activateStoryFeedback(host);
           });
           offset += page.stories.length;
+          refreshFeedRows();
         }
         if (!page.hasMore || page.stories.length === 0) {
           observer.disconnect();

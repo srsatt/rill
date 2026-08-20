@@ -8,7 +8,7 @@ export type RenderResponse = { version: number, status: number, headHtml: string
 
 export type StreamLink = { name: string, slug: string, };
 
-export type StoryCardModel = { id: string, title: string, summary: string, source: string, canonicalUrl: string | null, curator: string | null, publishedAt: string, coverageCount: number, readingMinutes: number, tags: Array<string>, };
+export type StoryCardModel = { id: string, title: string, summary: string, source: string, sourceIds: Array<string>, canonicalUrl: string | null, curator: string | null, publishedAt: string, read: boolean, coverageCount: number, readingMinutes: number, tags: Array<string>, };
 
 export type FeedPageModel = { title: string, activeStream: string, streams: Array<StreamLink>, stories: Array<StoryCardModel>, username: string, fontFamily: string, page: number, previousPage: number | null, nextPage: number | null, };
 

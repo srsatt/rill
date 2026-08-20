@@ -19,25 +19,24 @@ export function Sources(props: { page: SourcesPageModel }) {
               <input id="quick-source-input" name="input" placeholder="https://example.com or https://t.me/channel" autocomplete="url" required />
               <button type="submit" class="primary-action">Add source</button>
             </form>
-            <div class="quick-examples" aria-label="Examples">
-              <span>Try:</span>
-              <button type="button" data-quick-source="https://news.ycombinator.com/rss">Hacker News</button>
-              <button type="button" data-quick-source="https://t.me/cortex_pulse">@cortex_pulse</button>
-            </div>
             <p id="quick-add-result" class="quick-add-result" role="status" aria-live="polite"></p>
           </>, "p-0")}
         </>, "quick-add-card")}
       </section>
 
-      <section aria-labelledby="configured-sources-heading">
-        {card(<>
-          {cardHeader(<><h2 id="configured-sources-heading">Configured sources</h2><p class="section-description">Health, polling, and access for every connected source.</p></>, "p-0 pb-5")}
-          {cardContent(<div id="source-manager-list" class="loading-region" aria-live="polite"><p>Loading sources…</p></div>, "p-0")}
-        </>, "admin-section")}
+      <section aria-labelledby="configured-sources-heading" class="configured-sources settings-collection">
+        <header class="settings-collection-header"><div><h2 id="configured-sources-heading">Configured sources</h2><p>Health, polling, and access for every connected source.</p></div></header>
+        <div class="settings-browser">
+          <div id="source-manager-list" class="settings-list loading-region" role="listbox" aria-label="Sources" aria-live="polite"><p>Loading sources…</p></div>
+          <div id="source-manager-detail" class="settings-detail" aria-live="polite"><p class="settings-empty">Choose a source to inspect.</p></div>
+        </div>
       </section>
 
-      <section aria-labelledby="rss-heading" class="advanced-source-section">
-        {card(<>{cardHeader(<><h2 id="rss-heading">RSS and Atom</h2><p class="section-description">Add a feed directly or move a collection with OPML.</p></>, "p-0 pb-5")}{cardContent(<>
+      <section aria-labelledby="manual-sources-heading" class="manual-sources">
+        <header><h2 id="manual-sources-heading">Add another source</h2><p>Choose a setup method.</p></header>
+        <details class="source-method">
+          <summary><span>RSS and Atom</span><small>Feed URL or OPML</small></summary>
+          <div class="source-method-body form-columns">
           <form id="rss-create" class="admin-form">
             <label>Name <input name="name" required /></label>
             <label>Feed URL <input name="url" type="url" autocomplete="url" required /></label>
@@ -48,12 +47,11 @@ export function Sources(props: { page: SourcesPageModel }) {
             <label>Import OPML <input name="opml" type="file" accept=".opml,.xml,text/xml" required /></label>
             <button type="submit" class="secondary-action">Import feeds</button>
           </form><p class="mt-3 text-sm"><a href="/api/v1/sources/rss/opml">Export current feeds as OPML</a></p></div>
-        </>, "grid gap-6 p-0 lg:grid-cols-2")}</>, "admin-section")}
-      </section>
-
-      <section aria-labelledby="email-heading" class="advanced-source-section">
-        {card(<>{cardHeader(<><h2 id="email-heading">Email newsletters</h2><p class="section-description">Import newsletters from a dedicated IMAP mailbox.</p></>, "p-0 pb-5")}{cardContent(
-        props.page.emailAvailable ? (
+          </div>
+        </details>
+        <details class="source-method">
+          <summary><span>Email newsletters</span><small>IMAP mailbox</small></summary>
+          <div class="source-method-body">{props.page.emailAvailable ? (
           <form id="email-create" class="admin-form">
             <label>Name <input name="name" required /></label>
             <label>IMAP host <input name="host" required /></label>
@@ -64,13 +62,11 @@ export function Sources(props: { page: SourcesPageModel }) {
             <label class="checkbox-label"><input name="markAsRead" type="checkbox" /> Mark imported mail seen</label>
             <button type="submit" class="primary-action">Add mailbox</button>
           </form>
-        ) : <p>Configure RILL_MASTER_KEY to enable encrypted credentials.</p>
-        , "p-0")}</>, "admin-section")}
-      </section>
-
-      <section aria-labelledby="telegram-heading" class="advanced-source-section">
-        {card(<>{cardHeader(<><h2 id="telegram-heading">Telegram channels</h2><p class="section-description">Follow a public channel by username and bind your account to the Rill bot for subscription control.</p></>, "p-0 pb-5")}{cardContent(
-          <div class="form-columns telegram-settings">
+          ) : <p>Configure RILL_MASTER_KEY to enable encrypted credentials.</p>}</div>
+        </details>
+        <details class="source-method">
+          <summary><span>Telegram channels</span><small>Public channel or bot binding</small></summary>
+          <div class="source-method-body form-columns telegram-settings">
             <form id="telegram-source-create" class="admin-form">
               <label>Channel username <input name="username" placeholder="channelname" pattern="@?[A-Za-z][A-Za-z0-9_]{4,31}" aria-describedby="telegram-username-help" required /></label>
               <p id="telegram-username-help" class="field-help">Use the public username from the channel link. The leading @ is optional. Public-channel subscriptions do not require the Rill bot.</p>
@@ -82,7 +78,7 @@ export function Sources(props: { page: SourcesPageModel }) {
               <div id="telegram-binding" class="loading-region" aria-live="polite"><p>Loading binding…</p></div>
             </section>
           </div>
-        , "p-0")}</>, "admin-section")}
+        </details>
       </section>
 
     </>,

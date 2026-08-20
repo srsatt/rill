@@ -40,9 +40,17 @@ test("authenticated Solid feed hydrates in place", async ({ page }) => {
   await page.goto("/stream/home", { waitUntil: "networkidle" });
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Give Rill one good source" })).toBeVisible();
-  await expect(page.locator("[data-feed-toolbar-enhancement][data-enhanced=true]")).toBeVisible();
+  const toolbar = page.locator("[data-feed-toolbar-enhancement][data-enhanced=true]");
+  await expect(toolbar).toBeVisible();
+  const filters = toolbar.locator("summary[aria-label='Filters']");
+  await expect(filters).toBeVisible();
+  await expect(page.getByRole("tab", { name: "All" })).toBeHidden();
+  await expect(page.getByLabel("Filter stories")).toBeHidden();
+  const storyListTop = (await page.locator("[data-story-list]").boundingBox())?.y;
+  await filters.click();
   await expect(page.getByRole("tab", { name: "All" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByLabel("Filter stories")).toBeVisible();
+  expect((await page.locator("[data-story-list]").boundingBox())?.y).toBe(storyListTop);
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll((links) => links.map((link) => (link as HTMLLinkElement).sheet !== null));
   expect(styles).toEqual([true]);
 
@@ -70,6 +78,10 @@ test("modern shell reflows at 320px and exposes a keyboard-safe mobile sheet", a
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(menu).toBeFocused();
+  for (const route of ["/search", "/favorites", "/history", "/sources", "/settings/readers", "/admin", "/reader"]) {
+    await page.goto(route, { waitUntil: "networkidle" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), route).toBe(true);
+  }
 });
 
 test("modern shell starts with a skip link and named navigation landmarks", async ({ page }) => {
@@ -93,6 +105,9 @@ test("modern shell starts with a skip link and named navigation landmarks", asyn
 test("account theme picker persists light and dark choices", async ({ page }) => {
   await login(page);
   await page.getByRole("button", { name: /Account menu/ }).click();
+  const menu = page.getByRole("menu");
+  for (const destination of ["Sources", "Settings", "Administration"]) await expect(menu.getByRole("menuitem", { name: destination, exact: true })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Reader mode", exact: true })).toHaveCount(0);
   await page.getByRole("menuitemradio", { name: "Dark" }).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
 
@@ -134,6 +149,10 @@ test("source, story feedback, and stream management use the real API", async ({ 
 
   expect((await page.request.delete(`${fixtureUrl}/action/requests`)).ok()).toBe(true);
   await page.goto("/settings/readers");
+  for (const tab of ["Streams", "Actions", "Devices"]) {
+    await page.getByRole("tab", { name: tab, exact: true }).click();
+    await expect(page.locator(".settings-panel:not([hidden]) .settings-collection")).toHaveCSS("border-top-width", "0px");
+  }
   await page.getByRole("tab", { name: "Actions" }).click();
   const actionForm = page.locator("#favorite-action-create");
   await actionForm.getByLabel("Name", { exact: true }).fill("Fixture favorite action");
@@ -147,18 +166,22 @@ test("source, story feedback, and stream management use the real API", async ({ 
 
   await page.goto("/sources");
   const rssForm = page.locator("#rss-create");
+  await expect(rssForm).toBeHidden();
+  await page.locator(".source-method").filter({ hasText: "RSS and Atom" }).locator("summary").click();
   await rssForm.getByLabel("Name").fill("Fixture RSS");
   await rssForm.getByLabel("Feed URL").fill(`${fixtureUrl}/rss.xml`);
   await rssForm.getByRole("button", { name: "Add feed" }).click();
-  const source = page.locator("article").filter({ has: page.getByRole("heading", { name: "Fixture RSS" }) });
+  const source = page.locator(".source-row").filter({ hasText: "Fixture RSS" });
   await expect(source).toBeVisible();
-  await source.getByRole("button", { name: "Fetch now" }).click();
+  await source.click();
+  await page.locator("#source-manager-detail").getByRole("button", { name: "Fetch now" }).click();
 
   await expect.poll(async () => {
     await page.goto("/stream/home");
     return page.getByRole("link", { name: "Germany changes public software procurement" }).count();
   }, { timeout: 20_000 }).toBe(1);
-  const storyCard = page.locator(".story-row").first();
+  const storyTitle = page.getByRole("link", { name: "Germany changes public software procurement" });
+  const storyCard = page.locator(".story-row").filter({ has: storyTitle });
   await expect(storyCard.locator(".story-source-link")).toHaveAttribute("href", `${fixtureUrl}/article/direct`);
   const cardBeforeHover = await storyCard.boundingBox();
   expect(cardBeforeHover).not.toBeNull();
@@ -167,7 +190,7 @@ test("source, story feedback, and stream management use the real API", async ({ 
   const cardAfterHover = await storyCard.boundingBox();
   expect(cardAfterHover?.x).toBe(cardBeforeHover?.x);
   expect(cardAfterHover?.y).toBe(cardBeforeHover?.y);
-  await page.getByRole("link", { name: "Germany changes public software procurement" }).click();
+  await storyTitle.click();
   await expect(page.getByRole("link", { name: "Open original" })).toHaveAttribute("href", `${fixtureUrl}/article/direct`);
   await expect(page.getByRole("link", { name: "Discussion" })).toHaveAttribute("href", `${fixtureUrl}/discussion/direct`);
   for (const feedback of ["Like", "Dislike", "Favorite"]) {
@@ -237,11 +260,17 @@ test("feed loads older stories without pagination and keeps compact actions insi
   await login(page);
   await page.goto("/sources");
   const rssForm = page.locator("#rss-create");
+  await expect(rssForm).toBeHidden();
+  await page.locator(".source-method").filter({ hasText: "RSS and Atom" }).locator("summary").click();
   await rssForm.getByLabel("Name").fill("Visual audit RSS");
   await rssForm.getByLabel("Feed URL").fill(`${fixtureUrl}/visual-audit-rss.xml`);
   await rssForm.getByRole("button", { name: "Add feed" }).click();
-  const source = page.locator("article").filter({ has: page.getByRole("heading", { name: "Visual audit RSS" }) });
-  await source.getByRole("button", { name: "Fetch now" }).click();
+  const source = page.locator(".source-row").filter({ hasText: "Visual audit RSS" });
+  await source.click();
+  await page.locator("#source-manager-detail").getByRole("button", { name: "Fetch now" }).click();
+  await rssForm.getByLabel("Name").fill("Idle source");
+  await rssForm.getByLabel("Feed URL").fill(`${fixtureUrl}/idle.xml`);
+  await rssForm.getByRole("button", { name: "Add feed" }).click();
 
   await expect.poll(async () => {
     const response = await page.request.get("/stream/all");
@@ -260,7 +289,17 @@ test("feed loads older stories without pagination and keeps compact actions insi
   const card = page.locator(".story-row").first();
   const actions = card.locator(".story-feedback-enhancement");
   await expect(actions).toHaveCSS("opacity", "0");
+  await page.locator("[data-feed-toolbar-enhancement] summary[aria-label='Filters']").click();
+  const sourceFilter = page.getByLabel("Source");
+  await expect(sourceFilter.getByRole("option", { name: "All sources" })).toHaveCount(1);
+  await expect(sourceFilter.getByRole("option", { name: "Idle source" })).toHaveCount(1);
+  await expect(sourceFilter.getByRole("option", { name: "Visual audit RSS" })).toHaveCount(1);
+  await sourceFilter.selectOption({ label: "Idle source" });
+  await expect(card).toBeHidden();
+  await sourceFilter.selectOption({ label: "All sources" });
+  await expect(card).toBeVisible();
   await page.locator(".compact-switch").click();
+  await page.locator("[data-feed-toolbar-enhancement] summary[aria-label='Filters']").click();
   await card.hover();
   await expect(actions).toHaveCSS("opacity", "1");
   const cardBox = await card.boundingBox();
@@ -270,6 +309,11 @@ test("feed loads older stories without pagination and keeps compact actions insi
   expect((actionBox?.x ?? 0) + (actionBox?.width ?? 0)).toBeLessThanOrEqual((cardBox?.x ?? 0) + (cardBox?.width ?? 0));
   expect((actionBox?.y ?? 0) + (actionBox?.height ?? 0)).toBeLessThanOrEqual((cardBox?.y ?? 0) + (cardBox?.height ?? 0));
   await expect(card.getByText("1 source in this story")).toHaveCount(0);
+
+  await page.goto("/reader/stream/all");
+  const readerLike = page.getByRole("button", { name: "Like", exact: true }).first();
+  await expect(readerLike).toHaveCSS("border-top-width", "0px");
+  expect((await readerLike.boundingBox())?.height).toBeGreaterThanOrEqual(44);
 });
 
 test("account menu stays in the viewport and does not lock page scrolling", async ({ page }) => {

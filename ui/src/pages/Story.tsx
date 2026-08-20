@@ -123,7 +123,7 @@ function ReaderStory(props: { page: StoryPageModel; csrfToken: string }) {
           <input type="hidden" name="read" value={props.page.read ? "false" : "true"} />
           <button type="submit">{props.page.read ? <EyeOffIcon /> : <EyeIcon />} Mark {props.page.read ? "unread" : "read"}</button>
         </form>
-        <form method="post" action={`/reader/story/${props.page.storyId}/feedback`}>
+        <form class="reader-feedback-actions" method="post" action={`/reader/story/${props.page.storyId}/feedback`}>
           <input type="hidden" name="csrf_token" value={props.csrfToken} />
           <button name="feedback" value="like" aria-pressed={props.page.explicitFeedback === "like"}><ThumbsUpIcon /> Like</button>
           <button name="feedback" value="dislike" aria-pressed={props.page.explicitFeedback === "dislike"}><ThumbsDownIcon /> Dislike</button>

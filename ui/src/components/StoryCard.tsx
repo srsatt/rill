@@ -28,7 +28,7 @@ export function StoryCard(props: { story: StoryCardModel }) {
   };
 
   return (
-    <article class="story-row" data-story-id={props.story.id} data-published-at={props.story.publishedAt} data-topics={tags.join(",")}>
+    <article class="story-row" data-story-id={props.story.id} data-published-at={props.story.publishedAt} data-topics={tags.join(",")} data-source-ids={(props.story.sourceIds ?? []).join(",")} data-read={props.story.read ? "true" : "false"}>
       <div class="story-card-content">
           <div class="story-copy">
               <h2><a href={`/story/${props.story.id}`}>{props.story.title}</a></h2>

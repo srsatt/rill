@@ -160,6 +160,7 @@ fn story_card(hit: RankedStory) -> StoryCardModel {
             .publisher
             .map(|publisher| bounded_card_text(&publisher, 120))
             .unwrap_or_else(|| "Unknown publisher".to_owned()),
+        source_ids: hit.source_ids,
         canonical_url: hit.canonical_url,
         curator: None,
         published_at: hit
@@ -167,6 +168,7 @@ fn story_card(hit: RankedStory) -> StoryCardModel {
             .and_then(|timestamp| DateTime::<Utc>::from_timestamp(timestamp, 0))
             .map(|date| date.to_rfc3339())
             .unwrap_or_default(),
+        read: hit.read,
         coverage_count: hit.coverage,
         reading_minutes: word_count.div_ceil(200).max(1) as u32,
         tags: hit.topics,
@@ -199,7 +201,9 @@ mod view_model_tests {
             summary: summary.clone(),
             canonical_url: None,
             publisher: Some("Publisher".into()),
+            source_ids: vec!["source-1".into()],
             published_at: None,
+            read: true,
             coverage: 1,
             topics: Vec::new(),
             score: 0.0,
@@ -208,6 +212,8 @@ mod view_model_tests {
 
         assert_eq!(card.title, title);
         assert_eq!(card.summary, summary);
+        assert_eq!(card.source_ids, ["source-1"]);
+        assert!(card.read);
     }
 
     #[test]

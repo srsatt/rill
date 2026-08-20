@@ -41,26 +41,37 @@ async function jsonMutation(path: string, body: unknown, message: string): Promi
   return response;
 }
 
-function sourceCard(source: SourceView, reload: () => Promise<void>): HTMLElement {
-  const card = node("article"); card.className = "admin-card";
-  const health = source.lastErrorMessage ? `${source.consecutiveFailures} failures · ${source.lastErrorMessage}`
+function sourceHealth(source: SourceView): string {
+  return source.lastErrorMessage ? `${source.consecutiveFailures} failures · ${source.lastErrorMessage}`
     : source.lastSuccessAt ? `Last success ${new Date(source.lastSuccessAt * 1000).toLocaleString()}` : "Never fetched";
-  card.append(node("h3", source.name), node("p", `${source.kind} · ${source.visibility}`), node("p", health));
+}
+
+function sourceDetail(source: SourceView, reload: () => Promise<void>): HTMLElement {
+  const detail = node("article"); detail.className = "settings-preview source-detail";
+  const heading = node("div"); heading.className = "settings-preview-heading";
+  heading.append(node("strong", source.name), node("span", source.kind));
+  detail.append(heading, node("p", sourceHealth(source)), node("p", `${source.visibility} · ${source.enabled ? "Enabled" : "Disabled"}`));
   const poll = node("button", "Fetch now"); poll.type = "button";
+  poll.className = "secondary-action";
   poll.addEventListener("click", async () => {
     if (await jsonMutation(`/api/v1/sources/${source.id}/poll`, {}, "Source could not be queued.")) await reload();
   });
   const toggle = node("button", source.enabled ? "Disable" : "Enable"); toggle.type = "button";
+  toggle.className = "secondary-action";
   toggle.addEventListener("click", async () => {
     if (await jsonMutation(`/api/v1/sources/${source.id}/enabled`, { enabled: !source.enabled }, "Source state could not be changed.")) await reload();
   });
   const remove = node("button", "Remove"); remove.type = "button";
+  remove.className = "danger-action";
   remove.addEventListener("click", async () => {
     const response = await api(`/api/v1/sources/${source.id}`, { method: "DELETE" });
     if (response.ok) await reload(); else report("Source could not be removed.");
   });
-  card.append(poll, toggle, remove);
+  const actions = node("div"); actions.className = "settings-detail-actions";
+  actions.append(poll, toggle, remove); detail.append(actions);
   if (source.editable) {
+    const settings = node("details"); settings.className = "source-settings";
+    settings.append(node("summary", "Source settings"));
     const field = node("div"); field.className = "source-processing-field";
     const label = node("label", "Processing instructions");
     label.htmlFor = `source-processing-${source.id}`;
@@ -83,9 +94,10 @@ function sourceCard(source: SourceView, reload: () => Promise<void>): HTMLElemen
       save.disabled = false;
       status.textContent = response ? "Saved. Existing items queued for reprocessing." : "";
     });
-    card.append(field, save, status);
+    settings.append(field, save, status);
+    detail.append(settings);
   }
-  return card;
+  return detail;
 }
 
 async function renderTelegramBinding(container: HTMLDivElement): Promise<void> {
@@ -134,20 +146,37 @@ export function activateSources(): void {
   const quickAddForm = document.getElementById("source-quick-add");
   const quickAddResult = document.getElementById("quick-add-result");
   const sourceList = document.getElementById("source-manager-list");
+  const sourceDetailHost = document.getElementById("source-manager-detail");
   const rssForm = document.getElementById("rss-create");
   const opmlForm = document.getElementById("opml-import");
   const emailForm = document.getElementById("email-create");
   const telegramSourceForm = document.getElementById("telegram-source-create");
   const telegramBinding = document.getElementById("telegram-binding");
   if (!(quickAddForm instanceof HTMLFormElement) || !(quickAddResult instanceof HTMLParagraphElement)
-    || !(sourceList instanceof HTMLDivElement) || !(rssForm instanceof HTMLFormElement)
+    || !(sourceList instanceof HTMLDivElement) || !(sourceDetailHost instanceof HTMLDivElement) || !(rssForm instanceof HTMLFormElement)
     || !(opmlForm instanceof HTMLFormElement)) return;
+
+  let selectedSource = "";
 
   const reload = async () => {
     const sourcesResponse = await api("/api/v1/sources");
     if (!sourcesResponse.ok) { report("Sources could not be loaded."); return; }
     const sources = await sourcesResponse.json() as SourceView[];
-    sourceList.replaceChildren(...(sources.length ? sources.map((source) => sourceCard(source, reload)) : [node("p", "No sources configured.")]));
+    const rows = sources.map((source) => {
+      const row = node("button"); row.type = "button"; row.className = "settings-list-row source-row";
+      row.setAttribute("role", "option"); row.setAttribute("aria-selected", "false");
+      row.append(node("strong", source.name), node("span", `${source.kind} · ${sourceHealth(source)}`));
+      row.addEventListener("click", () => {
+        selectedSource = source.id;
+        rows.forEach((item) => item.setAttribute("aria-selected", String(item === row)));
+        sourceDetailHost.replaceChildren(sourceDetail(source, reload));
+      });
+      return row;
+    });
+    sourceList.replaceChildren(...(rows.length ? rows : [node("p", "No sources configured.")]));
+    const selectedIndex = Math.max(0, sources.findIndex((source) => source.id === selectedSource));
+    if (sources[selectedIndex] && rows[selectedIndex]) rows[selectedIndex].click();
+    else { selectedSource = ""; sourceDetailHost.replaceChildren(node("p", "Choose a source to inspect.")); }
     if (telegramBinding instanceof HTMLDivElement) await renderTelegramBinding(telegramBinding);
   };
 
