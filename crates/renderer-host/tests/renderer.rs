@@ -2,13 +2,23 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use anyhow::{Context, Result};
 use rill_contracts::{RENDER_PROTOCOL_VERSION, RenderMode, RenderRequest};
-use rill_renderer_host::{Renderer, RendererLimits, WasiRenderer};
+use rill_renderer_host::{RenderError, Renderer, RendererLimits, WasiRenderer};
 use serde_json::{Value, json};
 
 fn renderer() -> Result<WasiRenderer> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/ui-renderer.wasm");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/ui-renderer.cwasm");
     WasiRenderer::load(&path, RendererLimits::default())
         .with_context(|| format!("build renderer first: {}", path.display()))
+}
+
+#[test]
+fn rejects_uncompiled_renderer_artifact() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/ui-renderer.wasm");
+
+    assert!(matches!(
+        WasiRenderer::load(path, RendererLimits::default()),
+        Err(RenderError::Load(_))
+    ));
 }
 
 fn request(template: &str, mode: RenderMode) -> RenderRequest {

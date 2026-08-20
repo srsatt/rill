@@ -15,7 +15,7 @@ export RILL_DATABASE_PATH="$test_database"
 export RILL_BIND="127.0.0.1:$e2e_port"
 export RILL_PUBLIC_BASE_URL="http://127.0.0.1:$e2e_port"
 export RILL_STATIC_DIR="$project_root/ui/dist/client"
-export RILL_RENDERER_WASM="$project_root/artifacts/ui-renderer.wasm"
+export RILL_RENDERER_WASM="$project_root/artifacts/ui-renderer.cwasm"
 export RILL_ADMIN_PASSWORD="rill-e2e-password"
 export RILL_MASTER_KEY="CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk"
 

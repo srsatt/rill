@@ -10,9 +10,9 @@
     "coverage:renderer": "scriptc coverage dist/renderer/renderer.js --npm-static auto",
     "compile:renderer": "mkdir -p ../artifacts && PATH=../tools:$PATH ZIG_GLOBAL_CACHE_DIR=../target/zig-cache ZIG_LOCAL_CACHE_DIR=../target/zig-local-cache SCRIPTC_CC=zigcc SCRIPTC_TARGET=wasm32-wasi scriptc build dist/renderer/renderer.js --npm-static auto --no-keep-c -o ../artifacts/ui-renderer.wasm",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "pnpm build && playwright test",
+    "test:e2e": "cd .. && cargo xtask test-e2e",
     "screenshots:db": "sh ../tools/create-screenshot-db.sh",
-    "test:screenshots": "pnpm build && playwright test --config playwright.screenshots.config.ts"
+    "test:screenshots": "cd .. && cargo xtask build-assets && pnpm --dir ui exec playwright test --config playwright.screenshots.config.ts"
   },
   "dependencies": {
     "@corvu/resizable": "^0.2.5",

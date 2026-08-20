@@ -11,7 +11,7 @@ cargo xtask measure
 ```
 
 Install `target/release/rill` as `/opt/rill/rill`,
-`artifacts/ui-renderer.wasm` as `/opt/rill/ui-renderer.wasm`, and
+`artifacts/ui-renderer.cwasm` as `/opt/rill/ui-renderer.cwasm`, and
 `ui/dist/client` as `/opt/rill/static`. Copy `config/example.toml` to
 `/etc/rill/config.toml`, create `/var/lib/rill`, and install
 `deploy/systemd/rill.service`. The service expects a restricted
@@ -30,7 +30,9 @@ when the public origin is HTTPS. `rill doctor` validates config, assets,
 renderer instantiation, and database access before rollout.
 
 The optional `deploy/Containerfile` packages already-built, architecture-matched
-artifacts. It is intentionally not a frontend/Rust build environment.
+artifacts. The precompiled renderer must match the deployment architecture and
+remain immutable while Rill runs. The image is intentionally not a
+frontend/Rust build environment.
 
 ```bash
 cargo xtask build-release

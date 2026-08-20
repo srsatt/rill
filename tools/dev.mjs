@@ -12,7 +12,7 @@ const env = {
   RILL_BIND: "127.0.0.1:3000",
   RILL_PUBLIC_BASE_URL: "http://127.0.0.1:3000",
   RILL_STATIC_DIR: join(root, "ui/dist/client"),
-  RILL_RENDERER_WASM: join(root, "artifacts/ui-renderer.wasm"),
+  RILL_RENDERER_WASM: join(root, "artifacts/ui-renderer.cwasm"),
   RILL_MASTER_KEY: process.env.RILL_MASTER_KEY ?? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
   RILL_ADMIN_PASSWORD: process.env.RILL_ADMIN_PASSWORD ?? "rill-development-password",
   RILL_DEV_RELOAD: "1",
@@ -24,8 +24,7 @@ function run(program, args) {
 }
 
 function buildUi() {
-  run("cargo", ["xtask", "generate-contracts"]);
-  run("pnpm", ["--dir", "ui", "build"]);
+  run("cargo", ["xtask", "build-assets"]);
 }
 
 buildUi();

@@ -24,10 +24,12 @@ mod tests {
     async fn example_component_installs_and_polls_under_limits() {
         let pool = DbPool::open_in_memory().unwrap();
         let service = service(pool.clone());
+        let component = wat::parse_str(include_str!(
+            "../../../plugins/example-static/component.wat"
+        ))
+        .unwrap();
         let view = service
-            .install(include_bytes!(
-                "../../../plugins/example-static/component.wat"
-            ))
+            .install(&component)
             .await
             .unwrap();
         assert_eq!(view.metadata.id, "example-static");
@@ -65,7 +67,8 @@ mod tests {
             "(func $poll (param i32 i32 i32 i32 i32 i32) (result i32) unreachable)",
         );
         assert_ne!(trapping, source);
-        let view = service.install(trapping.as_bytes()).await.unwrap();
+        let component = wat::parse_str(trapping).unwrap();
+        let view = service.install(&component).await.unwrap();
         service.set_enabled(&view.installation_id, true).unwrap();
         pool.with_connection(|connection| {
             connection.execute_batch(

@@ -79,10 +79,11 @@ Solid TSX -> Vite SSR build -> dist/renderer/renderer.js
 renderer.js -> scriptc coverage --npm-static auto
 renderer.js -> SCRIPTC_CC=zigcc + SCRIPTC_TARGET=wasm32-wasi
             -> ui-renderer.wasm -> custom-section stripping
+            -> Wasmtime AOT -> architecture-matched ui-renderer.cwasm
 Rust workspace -> thin-LTO stripped rill executable
 ```
 
-The 2026-08-19 verification compiled 241/241 renderer statements statically with no
+The 2026-08-20 verification compiled 241/241 renderer statements statically with no
 dynamic remainder. At runtime `rill-renderer-host` writes one versioned JSON
 request to controlled WASI stdin, invokes `_start` under epoch, fuel, memory,
 input, and output limits, reads controlled stdout, and validates the versioned
@@ -113,22 +114,24 @@ Direct and roundup discoveries may converge on one document/story, while
 many-to-many `document_curators`, raw occurrences, and collection entries keep
 every curator path. Generated summary text never overwrites curator commentary.
 
-## Measured release baseline (2026-08-19)
+## Measured AOT release (2026-08-20)
 
 | Measurement | Actual value |
 |---|---:|
-| release executable | 27,483,392 bytes |
-| renderer WASM | 626,067 bytes |
-| modern initial JS | 47,399 raw / 14,454 Brotli bytes |
+| release executable | 24,922,160 bytes |
+| renderer compiler-input WASM | 623,400 bytes |
+| renderer AOT module | 2,252,544 bytes |
+| deployed executable + renderer | 27,174,704 bytes |
+| modern initial JS | 47,226 raw / 14,421 Brotli bytes |
 | reader JS | no artifact or script tag; 0 bytes |
-| cold startup to ready | 83.3 ms |
-| idle RSS | 204,259,328 bytes (194.80 MiB) |
-| max RSS after 100 SSR renders | 205,471,744 bytes (195.95 MiB) |
-| max RSS during RSS ingestion | 208,994,304 bytes (199.31 MiB) |
-| max RSS during 25-link expansion | 209,158,144 bytes (199.47 MiB) |
-| max sampled macOS physical footprint | 87,376,592 bytes (83.33 MiB) |
-| peak macOS physical footprint | 205,832,864 bytes (196.30 MiB) |
-| fixture SQLite database | 946,176 bytes |
+| cold startup to ready | 29.7 ms |
+| idle RSS | 18,825,216 bytes (17.95 MiB) |
+| max RSS after 100 SSR renders | 20,873,216 bytes (19.91 MiB) |
+| max RSS during RSS ingestion | 25,509,888 bytes (24.33 MiB) |
+| max RSS during 25-link expansion | 25,509,888 bytes (24.33 MiB) |
+| max sampled macOS physical footprint | 8,405,544 bytes (8.02 MiB) |
+| peak macOS physical footprint | 8,405,544 bytes (8.02 MiB) |
+| fixture SQLite database | 782,336 bytes |
 
 Exact method and scope: [resource-measurements.md](resource-measurements.md).
 
