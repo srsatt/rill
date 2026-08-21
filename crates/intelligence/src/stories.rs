@@ -208,7 +208,10 @@ impl IntelligenceService {
 
         let mut statement = connection.prepare(
             "SELECT d.id, d.title,
-             coalesce((SELECT su.summary_text FROM summaries su
+             coalesce((SELECT udp.summary_text FROM user_document_presentations udp
+               WHERE udp.user_id=?2 AND udp.document_id=d.id AND udp.included=1
+                 AND udp.input_checksum=d.exact_content_hash),
+             (SELECT su.summary_text FROM summaries su
                WHERE su.entity_type='document' AND su.entity_id=d.id
                  AND su.input_checksum=d.exact_content_hash
                ORDER BY su.created_at DESC LIMIT 1), substr(d.body_text, 1, 600)),
@@ -220,6 +223,10 @@ impl IntelligenceService {
              WHERE sm.story_id=?1 AND EXISTS (
                SELECT 1 FROM document_access da WHERE da.document_id=d.id
                  AND (da.user_id IS NULL OR da.user_id=?2))
+             AND NOT EXISTS (
+               SELECT 1 FROM user_document_presentations udp
+               WHERE udp.user_id=?2 AND udp.document_id=d.id AND udp.included=0
+                 AND udp.input_checksum=d.exact_content_hash)
              ORDER BY coalesce(d.published_at, d.created_at), d.id",
         )?;
         let rows = statement.query_map(params![story_id, user_id], |row| {

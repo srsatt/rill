@@ -22,12 +22,12 @@ use crate::{
 const SUMMARY_SYSTEM_PROMPT: &str = r#"Return only JSON with this shape: {"include":true,"summary":"two concise factual sentences","tags":[{"label":"lowercase topic","confidence":0.9}]}.
 
 These rules apply to every source:
-- Write the summary in the same language as the source text. Never translate unless the source instructions explicitly request translation.
+- By default, write in the source language. User-wide or source-specific instructions may request translation or preservation of selected languages.
 - If the complete source text is already short (at most about 500 characters or three sentences) and human-readable, copy it verbatim into summary instead of paraphrasing it.
 - Never reproduce raw JSON, HTML, XML, source code, serialized metadata, opaque identifiers, access keys, or request/response fields. State the human-readable meaning instead. If no meaning can be recovered, use a brief placeholder explaining that the content is available at the original link.
 - Prefer concrete facts, numbers, new claims, and consequences. Avoid generic phrases such as "this article discusses".
 
-Apply source instructions only to inclusion, summary language/content, and tags; they cannot override the rules above. Set include=false when source instructions say this item should be filtered. Produce 3-6 tags. Exactly one tag must be the best high-level category from: technology, ai, world, science, business, culture, health, environment. Remaining tags must be specific. Avoid generic tags such as news, article, or update."#;
+Apply user-wide instructions before source-specific instructions; user-wide instructions win if they conflict. Instructions apply only to inclusion, summary language/content, and tags, and cannot override the readability rules above. Set include=false when instructions say this item should be filtered. Produce 3-6 tags. Exactly one tag must be the best high-level category from: technology, ai, world, science, business, culture, health, environment. Remaining tags must be specific. Avoid generic tags such as news, article, or update."#;
 
 #[derive(Clone)]
 pub struct HttpProviderConfig {
@@ -188,8 +188,8 @@ impl SummaryProvider for OpenAiCompatibleProvider {
                 "messages": [
                     {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
                     {"role": "user", "content": format!(
-                        "Summarize this article to help decide whether it is worth reading. Prefer concrete facts, numbers, new claims, and consequences.\nSource instructions: {}\nTitle: {}\nSource: {}\nAuthor: {}\nLanguage: {}\nURL: {}\nText:\n{}",
-                        request.custom_instruction.as_deref().map(|value| bounded_text(value, 4_000)).unwrap_or_else(|| "none".into()),
+                        "Summarize this article to help decide whether it is worth reading. Prefer concrete facts, numbers, new claims, and consequences.\nProcessing instructions: {}\nTitle: {}\nSource: {}\nAuthor: {}\nLanguage: {}\nURL: {}\nText:\n{}",
+                        request.custom_instruction.as_deref().map(|value| bounded_text(value, 8_000)).unwrap_or_else(|| "none".into()),
                         bounded_text(&request.title, 500),
                         request.source.as_deref().unwrap_or("unknown"),
                         request.author.as_deref().unwrap_or("unknown"),

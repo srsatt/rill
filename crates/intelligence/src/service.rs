@@ -51,32 +51,34 @@ impl IntelligenceService {
                 .summarize(request(Some(prompt.clone())))
                 .await?;
             inclusion.push((source_id.clone(), response.include));
-            // ponytail: one document stores one summary; add per-source presentations if
-            // conflicting translation prompts become common.
             if response.include && selected.is_none() {
                 selected = Some(response);
             }
         }
-        let mut connection = self.pool.connection()?;
-        let transaction = connection.transaction()?;
-        for (source_id, included) in inclusion {
-            transaction.execute(
-                "UPDATE document_curators SET included=?3
-                 WHERE document_id=?1 AND source_instance_id=?2",
-                params![document_id, source_id, included],
-            )?;
-        }
         let Some(response) = selected else {
-            transaction.execute(
-                "DELETE FROM summaries WHERE entity_type='document' AND entity_id=?1",
-                [document_id],
-            )?;
-            transaction.execute(
-                "DELETE FROM document_topics WHERE document_id=?1",
-                [document_id],
-            )?;
-            transaction.commit()?;
-            drop(connection);
+            self.pool.with_connection(|connection| {
+                let transaction = connection.unchecked_transaction()?;
+                for (source_id, included) in inclusion {
+                    transaction.execute(
+                        "UPDATE document_curators SET included=?3
+                         WHERE document_id=?1 AND source_instance_id=?2",
+                        params![document_id, source_id, included],
+                    )?;
+                }
+                transaction.execute(
+                    "DELETE FROM summaries WHERE entity_type='document' AND entity_id=?1",
+                    [document_id],
+                )?;
+                transaction.execute(
+                    "DELETE FROM document_topics WHERE document_id=?1",
+                    [document_id],
+                )?;
+                transaction.execute(
+                    "DELETE FROM user_document_presentations WHERE document_id=?1",
+                    [document_id],
+                )?;
+                transaction.commit()
+            })?;
             self.invalidate_recommendations(None)?;
             return Ok(());
         };
@@ -92,7 +94,16 @@ impl IntelligenceService {
         }
         let identity = self.summary.identity();
         let topics = normalize_topics(response.tags);
-        transaction.execute(
+        self.pool.with_connection(|connection| {
+            let transaction = connection.unchecked_transaction()?;
+            for (source_id, included) in inclusion {
+                transaction.execute(
+                    "UPDATE document_curators SET included=?3
+                     WHERE document_id=?1 AND source_instance_id=?2",
+                    params![document_id, source_id, included],
+                )?;
+            }
+            transaction.execute(
                 "INSERT INTO summaries(id, entity_type, entity_id, provider, model, model_version,
                  input_checksum, summary_text) VALUES (?1, 'document', ?2, ?3, ?4, ?5, ?6, ?7)
                  ON CONFLICT(entity_type, entity_id, provider, model, model_version, input_checksum)
@@ -107,34 +118,112 @@ impl IntelligenceService {
                     &text
                 ],
             )?;
-        transaction.execute(
-            "DELETE FROM document_topics WHERE document_id=?1 AND provider=?2 AND model=?3
-             AND model_version=?4",
-            params![
-                &document.id,
-                &identity.provider,
-                &identity.model,
-                &identity.version
-            ],
-        )?;
-        for topic in topics {
             transaction.execute(
-                "INSERT INTO document_topics(document_id, topic, confidence, provider, model,
-                 model_version, input_checksum) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "DELETE FROM document_topics WHERE document_id=?1 AND provider=?2 AND model=?3
+                 AND model_version=?4",
                 params![
                     &document.id,
-                    topic.label,
-                    topic.confidence,
                     &identity.provider,
                     &identity.model,
-                    &identity.version,
-                    &document.input_checksum,
+                    &identity.version
                 ],
             )?;
-        }
-        transaction.commit()?;
-        drop(connection);
+            for topic in topics {
+                transaction.execute(
+                    "INSERT INTO document_topics(document_id, topic, confidence, provider, model,
+                     model_version, input_checksum) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        &document.id,
+                        topic.label,
+                        topic.confidence,
+                        &identity.provider,
+                        &identity.model,
+                        &identity.version,
+                        &document.input_checksum,
+                    ],
+                )?;
+            }
+            transaction.commit()
+        })?;
+        self.process_user_presentations(&document).await?;
         self.invalidate_recommendations(None)?;
+        Ok(())
+    }
+
+    async fn process_user_presentations(
+        &self,
+        document: &StoredDocument,
+    ) -> Result<(), IntelligenceError> {
+        let users = self.pool.with_connection(|connection| {
+            let mut statement = connection.prepare(
+                "SELECT ups.user_id, ups.processing_prompt
+                 FROM user_product_state ups
+                 WHERE trim(ups.processing_prompt) != '' AND EXISTS (
+                   SELECT 1 FROM document_access da WHERE da.document_id=?1
+                     AND (da.user_id IS NULL OR da.user_id=ups.user_id)
+                 ) ORDER BY ups.user_id",
+            )?;
+            statement
+                .query_map([&document.id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+                .collect::<rusqlite::Result<Vec<_>>>()
+        })?;
+        let identity = self.summary.identity();
+        let mut presentations = Vec::with_capacity(users.len());
+        for (user_id, user_prompt) in users {
+            let source_prompts = self.source_processing_instructions_for_user(&document.id, &user_id)?;
+            let source_prompt = source_prompts
+                .into_iter()
+                .filter(|prompt| !prompt.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            let custom_instruction = format!(
+                "User-wide instructions:\n{}\n\nSource-specific instructions:\n{}",
+                user_prompt,
+                if source_prompt.is_empty() { "none" } else { &source_prompt }
+            );
+            let response = self.summary.summarize(SummaryRequest {
+                title: document.title.clone(),
+                source: document.publisher.clone(),
+                author: document.author.clone(),
+                canonical_url: document.canonical_url.clone(),
+                language: document.language.clone(),
+                text: bounded_text(&document.body_text, 32_000),
+                custom_instruction: Some(bounded_text(&custom_instruction, 8_000)),
+            }).await?;
+            let text = response.text.split_whitespace().collect::<Vec<_>>().join(" ");
+            if text.is_empty() {
+                return Err(IntelligenceError::Invalid(
+                    "summary provider returned empty user presentation".into(),
+                ));
+            }
+            presentations.push((user_id, response.include, text));
+        }
+        self.pool.with_connection(|connection| {
+            let transaction = connection.unchecked_transaction()?;
+            transaction.execute(
+                "DELETE FROM user_document_presentations WHERE document_id=?1",
+                [&document.id],
+            )?;
+            for (user_id, included, text) in presentations {
+                transaction.execute(
+                    "INSERT INTO user_document_presentations(
+                       user_id, document_id, input_checksum, included, summary_text,
+                       provider, model, model_version
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    params![
+                        user_id,
+                        &document.id,
+                        &document.input_checksum,
+                        included,
+                        text,
+                        &identity.provider,
+                        &identity.model,
+                        &identity.version,
+                    ],
+                )?;
+            }
+            transaction.commit()
+        })?;
         Ok(())
     }
 
@@ -152,6 +241,28 @@ impl IntelligenceService {
              ORDER BY dc.source_instance_id",
         )?;
         let rows = statement.query_map([document_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    fn source_processing_instructions_for_user(
+        &self,
+        document_id: &str,
+        user_id: &str,
+    ) -> Result<Vec<String>, IntelligenceError> {
+        let connection = self.pool.connection()?;
+        let mut statement = connection.prepare(
+            "SELECT DISTINCT coalesce(si.processing_prompt, '')
+             FROM document_curators dc
+             LEFT JOIN source_instances si ON si.id=dc.source_instance_id
+             WHERE dc.document_id=?1 AND dc.included=1 AND (
+               dc.source_instance_id IS NULL OR EXISTS (
+                 SELECT 1 FROM source_access sa
+                 WHERE sa.source_instance_id=dc.source_instance_id
+                   AND (sa.user_id IS NULL OR sa.user_id=?2)
+               )
+             ) ORDER BY coalesce(si.processing_prompt, '')",
+        )?;
+        let rows = statement.query_map(params![document_id, user_id], |row| row.get(0))?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 

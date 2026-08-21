@@ -194,7 +194,7 @@ impl IntelligenceService {
         self.ensure_default_streams(user_id)?;
         self.pool.with_connection(|connection| {
             connection.query_row(
-                "SELECT ai_free_mode, stream_membership_mode, font_family FROM user_product_state
+                "SELECT ai_free_mode, stream_membership_mode, font_family, processing_prompt FROM user_product_state
                  WHERE user_id=?1",
                 [user_id],
                 |row| {
@@ -202,6 +202,7 @@ impl IntelligenceService {
                         ai_free_mode: row.get::<_, i64>(0)? != 0,
                         stream_membership_mode: row.get(1)?,
                         font_family: row.get(2)?,
+                        processing_prompt: row.get(3)?,
                     })
                 },
             )
@@ -223,23 +224,72 @@ impl IntelligenceService {
                 "font family must be sans or serif".into(),
             ));
         }
+        let processing_prompt = preferences.processing_prompt.trim();
+        if processing_prompt.chars().count() > 4_000 {
+            return Err(IntelligenceError::Invalid(
+                "article processing instructions are too long".into(),
+            ));
+        }
         self.ensure_default_streams(user_id)?;
-        self.pool.with_connection(|connection| {
+        let (changed_prompt, documents) = self.pool.with_connection(|connection| {
             let transaction = connection.unchecked_transaction()?;
+            let previous_prompt: String = transaction.query_row(
+                "SELECT processing_prompt FROM user_product_state WHERE user_id=?1",
+                [user_id],
+                |row| row.get(0),
+            )?;
+            let changed_prompt = previous_prompt != processing_prompt;
             transaction.execute(
                 "UPDATE user_product_state SET ai_free_mode=?2, stream_membership_mode=?3,
-                 font_family=?4,
+                 font_family=?4, processing_prompt=?5,
                  updated_at=unixepoch() WHERE user_id=?1",
                 params![
                     user_id,
                     preferences.ai_free_mode,
                     preferences.stream_membership_mode,
-                    preferences.font_family
+                    preferences.font_family,
+                    processing_prompt
                 ],
             )?;
+            if changed_prompt {
+                transaction.execute(
+                    "DELETE FROM user_document_presentations WHERE user_id=?1",
+                    [user_id],
+                )?;
+            }
+            let documents = if changed_prompt && !processing_prompt.is_empty() {
+                let mut statement = transaction.prepare(
+                    "SELECT DISTINCT document_id FROM document_access
+                     WHERE user_id IS NULL OR user_id=?1",
+                )?;
+                statement
+                    .query_map([user_id], |row| row.get::<_, String>(0))?
+                    .collect::<rusqlite::Result<Vec<_>>>()?
+            } else {
+                Vec::new()
+            };
             transaction.execute("DELETE FROM recommendation_runs WHERE user_id=?1", [user_id])?;
-            transaction.commit()
+            transaction.commit()?;
+            Ok::<_, rusqlite::Error>((changed_prompt, documents))
         })?;
+        if changed_prompt {
+            let update_id = Uuid::new_v4();
+            for document_id in documents {
+                self.jobs.enqueue(
+                    JobKind::GenerateSummary,
+                    &serde_json::to_value(crate::DocumentJobPayload {
+                        document_id: document_id.clone(),
+                    })?,
+                    EnqueueOptions {
+                        priority: -10,
+                        idempotency_key: Some(format!(
+                            "GenerateSummary:{document_id}:user-prompt:{update_id}"
+                        )),
+                        ..Default::default()
+                    },
+                )?;
+            }
+        }
         self.user_preferences(user_id)
     }
 
@@ -418,7 +468,10 @@ impl IntelligenceService {
                FROM visible_curators GROUP BY document_id
              )
              SELECT cs.id, d.id, d.title,
-             coalesce((SELECT su.summary_text FROM summaries su WHERE su.entity_type='document'
+             coalesce((SELECT udp.summary_text FROM user_document_presentations udp
+               WHERE udp.user_id=?1 AND udp.document_id=d.id AND udp.included=1
+                 AND udp.input_checksum=d.exact_content_hash),
+             (SELECT su.summary_text FROM summaries su WHERE su.entity_type='document'
                AND su.entity_id=d.id AND su.input_checksum=d.exact_content_hash
                ORDER BY su.created_at DESC LIMIT 1), CASE
                  WHEN lower(trim(d.body_text))='comments' AND EXISTS (
@@ -446,6 +499,11 @@ impl IntelligenceService {
              WHERE EXISTS (
                SELECT 1 FROM document_access da WHERE da.document_id=d.id
                  AND (da.user_id IS NULL OR da.user_id=?1)
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM user_document_presentations udp
+               WHERE udp.user_id=?1 AND udp.document_id=d.id AND udp.included=0
+                 AND udp.input_checksum=d.exact_content_hash
              )
              ORDER BY cs.candidate_order DESC, cs.id,
                coalesce(d.published_at, d.created_at), d.id",

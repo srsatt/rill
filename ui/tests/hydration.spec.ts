@@ -270,6 +270,7 @@ test("source, story feedback, and stream management use the real API", async ({ 
   await expect(page.getByRole("link", { name: "Fixture engineering" })).toHaveCount(0);
 
   await page.getByRole("tab", { name: "Experience" }).click();
+  await expect(page.getByLabel("Article instructions")).toHaveValue("");
   await page.getByLabel("AI-free mode").check();
   await page.getByLabel("Stream assignment").selectOption("exclusive");
   await page.getByLabel("Typography").selectOption("serif");

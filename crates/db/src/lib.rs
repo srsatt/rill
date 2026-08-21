@@ -70,6 +70,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
         17,
         include_str!("../../../migrations/0017_remove_home_stream.sql"),
     ),
+    (
+        18,
+        include_str!("../../../migrations/0018_user_processing_presentations.sql"),
+    ),
 ];
 
 #[derive(Debug, Error)]
@@ -276,6 +280,7 @@ mod tests {
             "preference_models",
             "feedback_events",
             "user_story_state",
+            "user_document_presentations",
             "source_affinity_events",
             "streams",
             "stream_rules",

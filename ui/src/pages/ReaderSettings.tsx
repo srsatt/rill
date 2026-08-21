@@ -41,6 +41,12 @@ export function ReaderSettings(props: { page: ReaderSettingsPageModel; csrfToken
               </select>
             </label>
           </div>
+          <div class="settings-field-group">
+            <label>Article instructions
+              <textarea name="processingPrompt" maxlength="4000" placeholder="Keep Russian and English unchanged. Translate German into English. Exclude celebrity news." />
+            </label>
+            <p class="field-help">Applied to articles from every source. Source-specific instructions still apply.</p>
+          </div>
           <button type="submit" class="primary-action">Save preferences</button>
           <p id="preferences-status" class="field-help" role="status" aria-live="polite"></p>
         </form>

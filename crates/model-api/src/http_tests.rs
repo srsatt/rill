@@ -177,7 +177,8 @@ mod http_tests {
 
     #[test]
     fn shared_summary_prompt_preserves_readable_source_content() {
-        assert!(SUMMARY_SYSTEM_PROMPT.contains("same language as the source text"));
+        assert!(SUMMARY_SYSTEM_PROMPT.contains("User-wide or source-specific instructions"));
+        assert!(SUMMARY_SYSTEM_PROMPT.contains("user-wide instructions win"));
         assert!(SUMMARY_SYSTEM_PROMPT.contains("already short"));
         assert!(SUMMARY_SYSTEM_PROMPT.contains("raw JSON, HTML, XML"));
     }

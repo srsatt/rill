@@ -12,6 +12,8 @@ mod tests {
 
     struct SourceInstructionSummary;
 
+    struct UserInstructionSummary;
+
     #[async_trait::async_trait]
     impl SummaryProvider for SourceInstructionSummary {
         fn identity(&self) -> ModelIdentity {
@@ -37,6 +39,44 @@ mod tests {
 
         async fn health(&self) -> Result<ModelHealth, ModelError> {
             Ok(ModelHealth { ready: true, detail: "ready".into() })
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl SummaryProvider for UserInstructionSummary {
+        fn identity(&self) -> ModelIdentity {
+            ModelIdentity {
+                provider: "test".into(),
+                model: "user-instructions".into(),
+                version: "1".into(),
+            }
+        }
+
+        async fn summarize(&self, request: SummaryRequest) -> Result<SummaryResponse, ModelError> {
+            let instruction = request.custom_instruction.unwrap_or_default();
+            let include = !instruction.contains("Exclude procurement");
+            let text = if instruction.contains("Translate German into English") {
+                "Translated presentation."
+            } else if instruction.is_empty() {
+                "Default presentation."
+            } else {
+                "Filtered presentation."
+            };
+            Ok(SummaryResponse {
+                text: text.into(),
+                tags: vec![TopicTag {
+                    label: "technology".into(),
+                    confidence: 0.9,
+                }],
+                include,
+            })
+        }
+
+        async fn health(&self) -> Result<ModelHealth, ModelError> {
+            Ok(ModelHealth {
+                ready: true,
+                detail: "ready".into(),
+            })
         }
     }
 
@@ -240,6 +280,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn user_processing_instructions_create_private_presentations_and_filters() {
+        let (pool, _, first_user_id, document_id) = service();
+        let second_user_id = Uuid::new_v4().to_string();
+        let third_user_id = Uuid::new_v4().to_string();
+        pool.with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO users(id, username, role) VALUES (?1, 'second-reader', 'user')",
+                [&second_user_id],
+            )?;
+            connection.execute(
+                "INSERT INTO users(id, username, role) VALUES (?1, 'third-reader', 'user')",
+                [&third_user_id],
+            )?;
+            Ok::<_, rusqlite::Error>(())
+        })
+        .unwrap();
+        let intelligence = IntelligenceService::new(
+            pool.clone(),
+            Arc::new(FeatureHashEmbeddingProvider::new(32).unwrap()),
+            Arc::new(UserInstructionSummary),
+            None,
+        );
+        intelligence
+            .update_user_preferences(
+                &first_user_id,
+                &UserPreferences {
+                    ai_free_mode: false,
+                    stream_membership_mode: "multiple".into(),
+                    font_family: "sans".into(),
+                    processing_prompt: "Translate German into English".into(),
+                },
+            )
+            .unwrap();
+        intelligence
+            .update_user_preferences(
+                &second_user_id,
+                &UserPreferences {
+                    ai_free_mode: false,
+                    stream_membership_mode: "multiple".into(),
+                    font_family: "sans".into(),
+                    processing_prompt: "Exclude procurement".into(),
+                },
+            )
+            .unwrap();
+        intelligence.ensure_default_streams(&third_user_id).unwrap();
+        let reprocessing_jobs: (i64, i64, i64) = pool
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT count(*), min(priority), max(priority) FROM jobs
+                     WHERE kind='GenerateSummary'",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+            })
+            .unwrap();
+        assert_eq!(reprocessing_jobs, (2, -10, -10));
+
+        intelligence.process_summary(&document_id).await.unwrap();
+
+        let presentation_count: i64 = pool
+            .with_connection(|connection| {
+                connection.query_row(
+                    "SELECT count(*) FROM user_document_presentations WHERE document_id=?1",
+                    [&document_id],
+                    |row| row.get(0),
+                )
+            })
+            .unwrap();
+        assert_eq!(presentation_count, 2);
+        let first_feed = intelligence
+            .rank_stream_now(&first_user_id, "all", 20, "test")
+            .unwrap();
+        assert_eq!(first_feed[0].summary, "Translated presentation.");
+        assert!(
+            intelligence
+                .rank_stream_now(&second_user_id, "all", 20, "test")
+                .unwrap()
+                .is_empty()
+        );
+        let third_feed = intelligence
+            .rank_stream_now(&third_user_id, "all", 20, "test")
+            .unwrap();
+        assert_eq!(third_feed[0].summary, "Default presentation.");
+    }
+
+    #[tokio::test]
     async fn recurring_posts_from_one_publisher_do_not_become_coverage() {
         let (pool, service, _, first_document_id) = service();
         service.process_embedding(&first_document_id).await.unwrap();
@@ -326,6 +452,7 @@ mod tests {
                     ai_free_mode: true,
                     stream_membership_mode: "multiple".into(),
                     font_family: "sans".into(),
+                    processing_prompt: String::new(),
                 },
             )
             .unwrap();
@@ -404,6 +531,7 @@ mod tests {
                     ai_free_mode: false,
                     stream_membership_mode: "exclusive".into(),
                     font_family: "sans".into(),
+                    processing_prompt: String::new(),
                 },
             )
             .unwrap();

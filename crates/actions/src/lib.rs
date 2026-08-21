@@ -416,9 +416,12 @@ impl ActionService {
             connection
                 .query_row(
                     "SELECT s.id, d.id, d.title, d.canonical_url, d.publisher, d.published_at,
+                     coalesce((SELECT udp.summary_text FROM user_document_presentations udp
+                      WHERE udp.user_id=?2 AND udp.document_id=d.id AND udp.included=1
+                        AND udp.input_checksum=d.exact_content_hash),
                      (SELECT summary_text FROM summaries su WHERE su.entity_type='document'
                       AND su.entity_id=d.id AND su.input_checksum=d.exact_content_hash
-                      ORDER BY su.created_at DESC LIMIT 1),
+                      ORDER BY su.created_at DESC LIMIT 1)),
                      (SELECT dc.curator_id FROM document_curators dc WHERE dc.document_id=d.id
                       ORDER BY dc.created_at LIMIT 1)
                      FROM feedback_events fe JOIN stories s ON s.id=fe.story_id

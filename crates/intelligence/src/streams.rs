@@ -53,6 +53,8 @@ pub struct UserPreferences {
     pub ai_free_mode: bool,
     pub stream_membership_mode: String,
     pub font_family: String,
+    #[serde(default)]
+    pub processing_prompt: String,
 }
 
 #[derive(Debug, Clone)]

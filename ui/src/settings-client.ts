@@ -25,6 +25,7 @@ interface UserPreferences {
   aiFreeMode: boolean;
   streamMembershipMode: "multiple" | "exclusive";
   fontFamily: "sans" | "serif";
+  processingPrompt: string;
 }
 
 let draggedStreamSlug = "";
@@ -237,13 +238,15 @@ function activatePreferences(): void {
   const aiFree = form.elements.namedItem("aiFreeMode");
   const membership = form.elements.namedItem("streamMembershipMode");
   const fontFamily = form.elements.namedItem("fontFamily");
-  if (!(aiFree instanceof HTMLInputElement) || !(membership instanceof HTMLSelectElement) || !(fontFamily instanceof HTMLSelectElement)) return;
+  const processingPrompt = form.elements.namedItem("processingPrompt");
+  if (!(aiFree instanceof HTMLInputElement) || !(membership instanceof HTMLSelectElement) || !(fontFamily instanceof HTMLSelectElement) || !(processingPrompt instanceof HTMLTextAreaElement)) return;
   void api("/api/v1/preferences").then(async (response) => {
     if (!response.ok) throw new Error();
     const preferences = await response.json() as UserPreferences;
     aiFree.checked = preferences.aiFreeMode;
     membership.value = preferences.streamMembershipMode;
     fontFamily.value = preferences.fontFamily;
+    processingPrompt.value = preferences.processingPrompt;
   }).catch(() => report("Preferences could not be loaded."));
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -252,6 +255,7 @@ function activatePreferences(): void {
       aiFreeMode: aiFree.checked,
       streamMembershipMode: membership.value,
       fontFamily: fontFamily.value,
+      processingPrompt: processingPrompt.value,
     }, "Preferences could not be saved.")) {
       status.textContent = "Saved.";
       document.querySelector(".modern-app")?.classList.toggle("reading-font-serif", fontFamily.value === "serif");
