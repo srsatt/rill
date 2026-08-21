@@ -6,6 +6,7 @@ struct RankingPersistence<'a> {
     version: &'a str,
     limit: usize,
     ui_mode: &'a str,
+    candidate_fingerprint: &'a str,
     stories: &'a [Candidate],
     replace_existing: bool,
 }
@@ -120,8 +121,13 @@ impl IntelligenceService {
                 run.stream_id,
                 run.provider,
                 run.model,
-                json!({"version": run.version, "limit": run.limit, "uiMode": run.ui_mode})
-                    .to_string()
+                json!({
+                    "version": run.version,
+                    "limit": run.limit,
+                    "uiMode": run.ui_mode,
+                    "candidateFingerprint": run.candidate_fingerprint,
+                })
+                .to_string()
             ],
         )?;
         for (rank, story) in run.stories.iter().enumerate() {
@@ -159,13 +165,15 @@ impl IntelligenceService {
                  WHERE user_id=?1 AND stream_id=?2 AND created_at >= unixepoch() - ?3
                    AND json_extract(config_json, '$.limit')=?4
                    AND json_extract(config_json, '$.uiMode')=?5
+                   AND json_extract(config_json, '$.candidateFingerprint')=?6
                  ORDER BY created_at DESC LIMIT 1",
                 params![
                     user_id,
                     stream_id,
                     CACHE_TTL_SECONDS,
                     i64::try_from(limit).unwrap_or(i64::MAX),
-                    ui_mode
+                    ui_mode,
+                    ranking_candidate_fingerprint(candidates),
                 ],
                 |row| row.get::<_, String>(0),
             )
@@ -218,4 +226,20 @@ impl IntelligenceService {
         }
         Ok(Some(ranked))
     }
+}
+
+fn ranking_candidate_fingerprint(candidates: &[Candidate]) -> String {
+    let mut identities = candidates
+        .iter()
+        .map(|candidate| (&candidate.story_id, &candidate.document_id))
+        .collect::<Vec<_>>();
+    identities.sort_unstable();
+    let mut hasher = Sha256::new();
+    for (story_id, document_id) in identities {
+        hasher.update(story_id.as_bytes());
+        hasher.update([0]);
+        hasher.update(document_id.as_bytes());
+        hasher.update([0]);
+    }
+    format!("{:x}", hasher.finalize())
 }

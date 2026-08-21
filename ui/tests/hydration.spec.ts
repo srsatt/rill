@@ -82,7 +82,7 @@ test("authenticated Solid feed hydrates in place", async ({ page }) => {
 test("modern shell reflows at 320px and exposes a keyboard-safe mobile sheet", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
   await login(page);
-  await page.goto("/stream/home", { waitUntil: "networkidle" });
+  await page.goto("/stream/all", { waitUntil: "networkidle" });
   await expect(page.locator("[data-mobile-nav-enhancement][data-enhanced=true]")).toBeVisible();
 
   const menu = page.getByRole("button", { name: "Menu" });
@@ -106,7 +106,7 @@ test("modern shell reflows at 320px and exposes a keyboard-safe mobile sheet", a
 
 test("modern shell starts with a skip link and named navigation landmarks", async ({ page }) => {
   await login(page);
-  await page.goto("/stream/home", { waitUntil: "networkidle" });
+  await page.goto("/stream/all", { waitUntil: "networkidle" });
   await page.keyboard.press("Tab");
   const skipLink = page.getByRole("link", { name: "Skip to main content" });
   await expect(skipLink).toBeFocused();
@@ -144,7 +144,7 @@ test("reader pairing and feed work with JavaScript disabled", async ({ browser, 
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
-  await page.goto("/settings/readers");
+  await page.goto("/settings/readers", { waitUntil: "networkidle" });
   await page.getByRole("tab", { name: "Devices" }).click();
   await page.getByLabel("Device label").fill("Playwright reader");
   await page.getByRole("button", { name: "Create one-time code" }).click();
@@ -168,7 +168,7 @@ test("source, story feedback, and stream management use the real API", async ({ 
   await login(page);
 
   expect((await page.request.delete(`${fixtureUrl}/action/requests`)).ok()).toBe(true);
-  await page.goto("/settings/readers");
+  await page.goto("/settings/readers", { waitUntil: "networkidle" });
   await expect(page.locator("#user-preferences")).toHaveCSS("row-gap", "20px");
   await expect(page.locator("#user-preferences .settings-field-group").first()).toHaveCSS("row-gap", "8px");
   for (const tab of ["Streams", "Actions", "Devices"]) {
@@ -186,7 +186,7 @@ test("source, story feedback, and stream management use the real API", async ({ 
   await actionForm.getByRole("button", { name: "Add favorite action" }).click();
   await expect(page.getByRole("heading", { name: "Fixture favorite action" })).toBeVisible();
 
-  await page.goto("/sources");
+  await page.goto("/sources", { waitUntil: "networkidle" });
   const rssForm = page.locator("#rss-create");
   await expect(rssForm).toBeHidden();
   await page.locator(".source-method").filter({ hasText: "RSS and Atom" }).locator("summary").click();
@@ -203,12 +203,13 @@ test("source, story feedback, and stream management use the real API", async ({ 
   await sourceDetail.getByRole("button", { name: "Fetch now" }).click();
 
   await expect.poll(async () => {
-    await page.goto("/stream/home");
+    await page.goto("/stream/all");
     return page.getByRole("link", { name: "Germany changes public software procurement" }).count();
   }, { timeout: 20_000 }).toBe(1);
   const storyTitle = page.getByRole("link", { name: "Germany changes public software procurement" });
   const storyCard = page.locator(".story-row").filter({ has: storyTitle });
   await expect(storyCard.locator(".story-source-link")).toHaveAttribute("href", `${fixtureUrl}/article/direct`);
+  await storyCard.scrollIntoViewIfNeeded();
   const cardBeforeHover = await storyCard.boundingBox();
   expect(cardBeforeHover).not.toBeNull();
   await storyCard.hover();
@@ -240,7 +241,7 @@ test("source, story feedback, and stream management use the real API", async ({ 
     }),
   ]);
 
-  await page.goto("/settings/readers");
+  await page.goto("/settings/readers", { waitUntil: "networkidle" });
   await page.getByRole("tab", { name: "Streams" }).click();
   await page.getByRole("button", { name: "Add stream" }).click();
   const streamForm = page.locator("#stream-create");
@@ -252,10 +253,10 @@ test("source, story feedback, and stream management use the real API", async ({ 
   await streamForm.getByRole("button", { name: "Create stream" }).click();
   await expect(page.getByRole("link", { name: "Fixture stream" })).toBeVisible();
   let stream = page.locator(".settings-list-entry").filter({ has: page.getByRole("option", { name: /Fixture stream/ }) });
-  const homeStream = page.locator(".settings-list-entry").filter({ has: page.getByRole("option", { name: /Home/ }) });
+  const technologyStream = page.locator(".settings-list-entry").filter({ has: page.getByRole("option", { name: /Technology/ }) });
   const transfer = await page.evaluateHandle(() => new DataTransfer());
   await stream.locator(".stream-drag-handle").dispatchEvent("dragstart", { dataTransfer: transfer });
-  await homeStream.dispatchEvent("drop", { dataTransfer: transfer });
+  await technologyStream.dispatchEvent("drop", { dataTransfer: transfer });
   await expect(page.getByRole("option").nth(0)).toContainText("All");
   await expect(page.getByRole("option").nth(1)).toContainText("Fixture stream");
   await page.getByRole("option", { name: /Fixture stream/ }).click();
@@ -277,14 +278,14 @@ test("source, story feedback, and stream management use the real API", async ({ 
   await expect(page.locator(".modern-app")).toHaveClass(/reading-font-serif/);
   await page.goto("/reader");
   await expect(page.locator(".reader")).toHaveClass(/reading-font-serif/);
-  await page.goto("/stream/home");
+  await page.goto("/stream/all");
   await expect(page.locator(".modern-app")).toHaveClass(/reading-font-serif/);
 });
 
 test("feed loads older stories without pagination and keeps compact actions inside cards", async ({ page }) => {
   test.setTimeout(60_000);
   await login(page);
-  await page.goto("/sources");
+  await page.goto("/sources", { waitUntil: "networkidle" });
   const rssForm = page.locator("#rss-create");
   await expect(rssForm).toBeHidden();
   await page.locator(".source-method").filter({ hasText: "RSS and Atom" }).locator("summary").click();
@@ -365,6 +366,12 @@ test("feed loads older stories without pagination and keeps compact actions insi
     return Math.abs(center(channel) - center(time));
   });
   expect(telegramAlignment).toBeLessThan(2);
+  await page.setViewportSize({ width: 320, height: 720 });
+  const readerSummary = page.locator(".reader-story-summary").first();
+  await readerSummary.evaluate((summary) => {
+    summary.textContent = `{"signatureCipher":"${"x".repeat(800)}"}`;
+  });
+  expect(await readerSummary.evaluate((summary) => summary.scrollWidth <= summary.clientWidth)).toBe(true);
 });
 
 test("account menu stays in the viewport and does not lock page scrolling", async ({ page }) => {

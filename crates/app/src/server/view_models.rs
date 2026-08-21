@@ -108,11 +108,21 @@ fn story_page_model(
 }
 
 fn story_variant_model(variant: StoryVariantView) -> StoryVariantModel {
+    let body_text = presentable_body_text(
+        &variant.body_text,
+        &variant.title,
+        variant.canonical_url.as_deref(),
+    );
+    let summary = presentable_body_text(
+        &variant.summary,
+        &variant.title,
+        variant.canonical_url.as_deref(),
+    );
     StoryVariantModel {
         document_id: variant.document_id,
         title: variant.title,
-        summary: variant.summary,
-        body_text: variant.body_text,
+        summary,
+        body_text,
         canonical_url: variant.canonical_url,
         links: variant
             .links
@@ -146,15 +156,50 @@ fn story_variant_model(variant: StoryVariantView) -> StoryVariantModel {
     }
 }
 
+fn presentable_body_text(body_text: &str, title: &str, canonical_url: Option<&str>) -> String {
+    let trimmed = body_text.trim();
+    let json_payload = serde_json::from_str::<serde_json::Value>(trimmed)
+        .ok()
+        .is_some_and(|value| value.is_object() || value.is_array());
+    let prefix = trimmed
+        .chars()
+        .take(256)
+        .collect::<String>()
+        .to_ascii_lowercase();
+    let markup_payload = prefix.starts_with("<!doctype")
+        || prefix.starts_with("<html")
+        || prefix.starts_with("<body")
+        || prefix.starts_with("<script")
+        || prefix.starts_with("<?xml");
+    if !json_payload && !markup_payload {
+        return body_text.to_owned();
+    }
+    let title = bounded_card_text(title.trim(), 300);
+    let is_youtube = canonical_url.is_some_and(|url| {
+        let url = url.to_ascii_lowercase();
+        url.contains("youtube.com/") || url.contains("youtu.be/")
+    });
+    if is_youtube {
+        format!("Watch “{title}” on YouTube.")
+    } else {
+        format!("Open “{title}” at the original source.")
+    }
+}
+
 fn story_card(hit: RankedStory) -> StoryCardModel {
-    let word_count = hit.summary.split_whitespace().count();
+    let summary = presentable_body_text(
+        &hit.summary,
+        &hit.title,
+        hit.canonical_url.as_deref(),
+    );
+    let word_count = summary.split_whitespace().count();
     StoryCardModel {
         id: hit.story_id,
         title: hit.title,
-        summary: if hit.summary.trim().is_empty() {
+        summary: if summary.trim().is_empty() {
             "No summary available.".to_owned()
         } else {
-            hit.summary
+            summary
         },
         source: hit
             .publisher
@@ -186,7 +231,7 @@ fn bounded_card_text(value: &str, maximum_chars: usize) -> String {
 
 #[cfg(test)]
 mod view_model_tests {
-    use super::{bounded_card_text, story_card};
+    use super::{bounded_card_text, presentable_body_text, story_card};
     use rill_intelligence::RankedStory;
     use serde_json::json;
 
@@ -220,5 +265,46 @@ mod view_model_tests {
     fn card_text_is_bounded_at_unicode_character_boundaries() {
         assert_eq!(bounded_card_text("café東京", 5), "café東…");
         assert_eq!(bounded_card_text("short", 5), "short");
+    }
+
+    #[test]
+    fn machine_payload_body_uses_meaningful_placeholder() {
+        assert_eq!(
+            presentable_body_text(
+                r#"{"streamingData":{"signatureCipher":"opaque-key"}}"#,
+                "Интервью о SQLite",
+                Some("https://youtu.be/fixture"),
+            ),
+            "Watch “Интервью о SQLite” on YouTube."
+        );
+        assert_eq!(
+            presentable_body_text(
+                "<html><body>machine output</body></html>",
+                "Readable title",
+                Some("https://example.com/item"),
+            ),
+            "Open “Readable title” at the original source."
+        );
+    }
+
+    #[test]
+    fn story_card_hides_stored_machine_summary() {
+        let card = story_card(RankedStory {
+            story_id: "story-1".into(),
+            document_id: "document-1".into(),
+            title: "Интервью о SQLite".into(),
+            summary: r#"{"streamingData":{"signatureCipher":"opaque-key"}}"#.into(),
+            canonical_url: Some("https://www.youtube.com/watch?v=fixture".into()),
+            publisher: Some("YouTube".into()),
+            source_ids: vec!["source-1".into()],
+            published_at: None,
+            read: false,
+            coverage: 1,
+            topics: Vec::new(),
+            score: 0.0,
+            explanation: json!({}),
+        });
+
+        assert_eq!(card.summary, "Watch “Интервью о SQLite” on YouTube.");
     }
 }

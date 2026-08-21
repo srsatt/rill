@@ -68,7 +68,7 @@ model failures still fall back to the built-in local behavior.
 
 For real deployments, inject `RILL_MASTER_KEY` and bootstrap passwords from a
 restricted environment file or secret manager; do not keep the example shell
-values. Open `/login`, `/admin`, `/stream/home`, `/reader/pair`,
+values. Open `/login`, `/admin`, `/stream/all`, `/reader/pair`,
 `/health/live`, or `/health/ready` at the configured origin.
 
 Useful CLI operations:

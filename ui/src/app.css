@@ -1031,6 +1031,16 @@
 .reader.story .article-body {
   white-space: pre-wrap;
 }
+.reader article,
+.reader-story-title,
+.reader-story-summary,
+.reader-story-meta,
+.reader.story .article-body {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .reader-story-title {
   margin: 0;
   color: #171717;

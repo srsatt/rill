@@ -55,7 +55,7 @@ impl IntelligenceService {
     }
 
     pub fn delete_stream(&self, user_id: &str, slug: &str) -> Result<(), IntelligenceError> {
-        if matches!(slug, "home" | "all") {
+        if slug == "all" {
             return Err(IntelligenceError::Invalid(
                 "built-in streams cannot be deleted".into(),
             ));

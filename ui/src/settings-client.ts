@@ -120,13 +120,13 @@ function streamDetail(stream: StreamView, reload: () => Promise<void>): HTMLElem
   title.className = "settings-preview-heading";
   const link = node("a", stream.name);
   link.href = `/stream/${stream.slug}`;
-  title.append(link, node("span", stream.slug === "home" || stream.slug === "all" ? "Built-in" : "Custom"));
+  title.append(link, node("span", stream.slug === "all" ? "Built-in" : "Custom"));
   detail.append(
     title,
     node("p", stream.semanticDescription || (stream.slug === "all" ? "Every story in one complete view." : "A broad reading lane.")),
     node("p", stream.rankingInstruction ? `Ranking: ${stream.rankingInstruction}` : "Default ranking"),
   );
-  if (stream.slug === "home" || stream.slug === "all") return detail;
+  if (stream.slug === "all") return detail;
 
   const form = node("form");
   form.className = "admin-form compact";

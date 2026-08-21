@@ -175,6 +175,40 @@ mod http_tests {
         assert!(output.include);
     }
 
+    #[test]
+    fn shared_summary_prompt_preserves_readable_source_content() {
+        assert!(SUMMARY_SYSTEM_PROMPT.contains("same language as the source text"));
+        assert!(SUMMARY_SYSTEM_PROMPT.contains("already short"));
+        assert!(SUMMARY_SYSTEM_PROMPT.contains("raw JSON, HTML, XML"));
+    }
+
+    #[tokio::test]
+    async fn summary_replaces_machine_payload_with_youtube_placeholder() {
+        let content = json!({
+            "include": true,
+            "summary": r#"{"playerResponse":{"streamingData":{"signatureCipher":"opaque-key"}}}"#,
+            "tags": ["technology"]
+        })
+        .to_string();
+        let body = json!({"choices":[{"message":{"content":content}}]}).to_string();
+        let server = mock_server(vec![(200, body)]).await;
+        let provider = OpenAiCompatibleProvider::new(config(server.url.clone())).unwrap();
+        let output = provider
+            .summarize(SummaryRequest {
+                title: "Интервью о SQLite".into(),
+                source: Some("YouTube".into()),
+                author: None,
+                canonical_url: Some("https://www.youtube.com/watch?v=fixture".into()),
+                language: Some("ru".into()),
+                text: "machine payload".into(),
+                custom_instruction: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(output.text, "Watch “Интервью о SQLite” on YouTube.");
+    }
+
     #[tokio::test]
     async fn summary_returns_source_filter_decision() {
         let content = r#"{"include":false,"summary":"Not relevant.","tags":["technology"]}"#;
@@ -205,7 +239,7 @@ mod http_tests {
         let output = provider
             .rank(RankRequest {
                 user_key: "opaque".into(),
-                stream_slug: "home".into(),
+                stream_slug: "all".into(),
                 ranking_instruction: Some("Prefer implementation details".into()),
                 candidates: vec![RankCandidate {
                     story_id: "known".into(),

@@ -30,8 +30,8 @@ fn request(template: &str, mode: RenderMode) -> RenderRequest {
         render_id: "test-".to_owned(),
         props: json!({
             "title": "Rill <News>",
-            "activeStream": "home",
-            "streams": [{ "name": "Home", "slug": "home" }],
+            "activeStream": "all",
+            "streams": [{ "name": "All", "slug": "all" }],
             "stories": [{
                 "id": "story-1",
                 "title": "<script>alert(1)</script>",
@@ -279,7 +279,7 @@ fn renders_every_page_template() -> Result<()> {
         (
             "reader-settings",
             RenderMode::Reader,
-            json!({ "title": "Reader settings", "username": "alice", "streams": [{ "name": "Home", "slug": "home" }], "activeStream": "home" }),
+            json!({ "title": "Reader settings", "username": "alice", "streams": [{ "name": "All", "slug": "all" }], "activeStream": "all" }),
             "Exit reader mode",
         ),
         (

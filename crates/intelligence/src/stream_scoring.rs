@@ -368,7 +368,7 @@ mod scoring_tests {
             vec![candidate("story-b"), candidate("story-a")],
             2,
             "user",
-            "home",
+            "all",
         );
         assert_eq!(ranked[0].story_id, "story-a");
     }

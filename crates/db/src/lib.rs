@@ -66,6 +66,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
         16,
         include_str!("../../../migrations/0016_source_processing.sql"),
     ),
+    (
+        17,
+        include_str!("../../../migrations/0017_remove_home_stream.sql"),
+    ),
 ];
 
 #[derive(Debug, Error)]
@@ -306,6 +310,62 @@ mod tests {
             })
             .unwrap();
         assert_eq!(enabled, 1);
+    }
+
+    #[test]
+    fn migration_removes_home_stream_and_its_loose_references() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("PRAGMA foreign_keys = ON;")
+            .unwrap();
+        for (_, migration) in &MIGRATIONS[..16] {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection
+            .execute_batch(
+                "INSERT INTO users(id, username, role) VALUES ('user', 'reader', 'user');
+                 INSERT INTO streams(id, owner_user_id, name, slug)
+                   VALUES ('all-stream', 'user', 'All', 'all'),
+                          ('home-stream', 'user', 'Home', 'home');
+                 INSERT INTO device_sessions(
+                   id, user_id, token_hash, csrf_hash, label, selected_stream_id,
+                   created_at, expires_at, last_used_at
+                 ) VALUES (
+                   'device', 'user', zeroblob(32), zeroblob(32), 'Reader', 'home-stream',
+                   1, 2, 1
+                 );
+                 INSERT INTO embedding_records(
+                   id, provider, model, model_version, dimension, input_checksum,
+                   entity_type, entity_id, vector_f32le
+                 ) VALUES (
+                   'embedding', 'fixture', 'fixture', '1', 1, x'01',
+                   'stream', 'home-stream', zeroblob(4)
+                 );
+                 INSERT INTO recommendation_runs(id, user_id, stream_id, provider, model)
+                   VALUES ('run', 'user', 'home-stream', 'fixture', 'fixture');",
+            )
+            .unwrap();
+
+        connection.execute_batch(MIGRATIONS[16].1).unwrap();
+
+        let count = |table: &str| {
+            connection
+                .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .unwrap()
+        };
+        assert_eq!(count("streams"), 1);
+        assert_eq!(count("embedding_records"), 0);
+        assert_eq!(count("recommendation_runs"), 0);
+        let selected: Option<String> = connection
+            .query_row(
+                "SELECT selected_stream_id FROM device_sessions WHERE id='device'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(selected, None);
     }
 
     #[test]

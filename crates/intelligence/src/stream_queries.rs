@@ -1,5 +1,5 @@
 impl IntelligenceService {
-    pub fn ensure_home_stream(&self, user_id: &str) -> Result<String, IntelligenceError> {
+    pub fn ensure_default_streams(&self, user_id: &str) -> Result<String, IntelligenceError> {
         let defaults = [
             (
                 "All",
@@ -10,17 +10,9 @@ impl IntelligenceService {
                 "Show newest stories first.",
             ),
             (
-                "Home",
-                "home",
-                1,
-                "Everything you follow, balanced across subjects and sources.",
-                serde_json::json!({}),
-                "Balance relevance, freshness, source affinity, and variety.",
-            ),
-            (
                 "Technology",
                 "technology",
-                2,
+                1,
                 "Software, programming, security, infrastructure, devices, and the technology industry.",
                 serde_json::json!({"includeTopics":["technology","software","programming","security","databases","rust","javascript","hardware"]}),
                 "Prefer concrete engineering detail, useful tools, and measured results.",
@@ -28,7 +20,7 @@ impl IntelligenceService {
             (
                 "AI",
                 "ai",
-                3,
+                2,
                 "Artificial intelligence research, models, products, agents, and their social impact.",
                 serde_json::json!({"includeTopics":["ai","artificial intelligence","machine learning","generative ai","llm","agents"]}),
                 "Prefer substantive releases, research, evaluations, and practical implementation details over hype.",
@@ -36,7 +28,7 @@ impl IntelligenceService {
             (
                 "World",
                 "world",
-                4,
+                3,
                 "International affairs, politics, economics, cities, and major events around the world.",
                 serde_json::json!({"includeTopics":["world","politics","international","economics","europe","germany","ukraine"]}),
                 "Prefer consequential reporting and diverse geographic coverage.",
@@ -44,7 +36,7 @@ impl IntelligenceService {
             (
                 "Science",
                 "science",
-                5,
+                4,
                 "Science, health, climate, space, and peer-reviewed research.",
                 serde_json::json!({"includeTopics":["science","research","health","climate","space","biology","physics"]}),
                 "Prefer primary research, careful evidence, and clear explanations.",
@@ -89,8 +81,8 @@ impl IntelligenceService {
                 [user_id],
             )?;
         }
-        let home = transaction.query_row(
-            "SELECT id FROM streams WHERE owner_user_id = ?1 AND slug = 'home'",
+        let all = transaction.query_row(
+            "SELECT id FROM streams WHERE owner_user_id = ?1 AND slug = 'all'",
             [user_id],
             |row| row.get(0),
         )?;
@@ -101,7 +93,7 @@ impl IntelligenceService {
                 warn!(error = %error, %stream_id, "default stream embedding could not be queued");
             }
         }
-        Ok(home)
+        Ok(all)
     }
 
     pub async fn create_stream(
@@ -165,7 +157,7 @@ impl IntelligenceService {
     }
 
     pub fn list_streams(&self, user_id: &str) -> Result<Vec<StreamView>, IntelligenceError> {
-        self.ensure_home_stream(user_id)?;
+        self.ensure_default_streams(user_id)?;
         let connection = self.pool.connection()?;
         let mut statement = connection.prepare(
             "SELECT id, name, slug, icon, sort_order, definition_text, ranking_instruction,
@@ -199,7 +191,7 @@ impl IntelligenceService {
         &self,
         user_id: &str,
     ) -> Result<UserPreferences, IntelligenceError> {
-        self.ensure_home_stream(user_id)?;
+        self.ensure_default_streams(user_id)?;
         self.pool.with_connection(|connection| {
             connection.query_row(
                 "SELECT ai_free_mode, stream_membership_mode, font_family FROM user_product_state
@@ -231,7 +223,7 @@ impl IntelligenceService {
                 "font family must be sans or serif".into(),
             ));
         }
-        self.ensure_home_stream(user_id)?;
+        self.ensure_default_streams(user_id)?;
         self.pool.with_connection(|connection| {
             let transaction = connection.unchecked_transaction()?;
             transaction.execute(
@@ -268,18 +260,18 @@ impl IntelligenceService {
         limit: usize,
         ui_mode: &str,
     ) -> Result<Vec<RankedStory>, IntelligenceError> {
-        self.ensure_home_stream(user_id)?;
+        self.ensure_default_streams(user_id)?;
         let preferences = self.user_preferences(user_id)?;
         let stream = self.load_stream(user_id, slug)?;
         let identity = self.embedding.identity();
         let affinities = load_affinity_scores(&self.pool, user_id)?;
         let mut candidates = self.load_candidates(user_id, &identity, &affinities)?;
-        if preferences.stream_membership_mode == "exclusive" && !matches!(slug, "home" | "all") {
+        if preferences.stream_membership_mode == "exclusive" && slug != "all" {
             let earlier = self
                 .list_streams(user_id)?
                 .into_iter()
                 .filter(|candidate_stream| {
-                    !matches!(candidate_stream.slug.as_str(), "home" | "all")
+                    candidate_stream.slug != "all"
                         && candidate_stream.position < stream.position
                 })
                 .collect::<Vec<_>>();
@@ -324,6 +316,7 @@ impl IntelligenceService {
                 preference.as_ref(),
             );
         }
+        let candidate_fingerprint = ranking_candidate_fingerprint(&candidates);
         let selected = diversify(candidates, limit.min(100), user_id, slug);
         self.persist_ranking(RankingPersistence {
             user_id,
@@ -337,6 +330,7 @@ impl IntelligenceService {
             version: "1",
             limit,
             ui_mode,
+            candidate_fingerprint: &candidate_fingerprint,
             stories: &selected,
             replace_existing: false,
         })?;

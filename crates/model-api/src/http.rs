@@ -19,6 +19,16 @@ use crate::{
     SummaryProvider, SummaryRequest, SummaryResponse, TopicTag, heuristic_topic_tags,
 };
 
+const SUMMARY_SYSTEM_PROMPT: &str = r#"Return only JSON with this shape: {"include":true,"summary":"two concise factual sentences","tags":[{"label":"lowercase topic","confidence":0.9}]}.
+
+These rules apply to every source:
+- Write the summary in the same language as the source text. Never translate unless the source instructions explicitly request translation.
+- If the complete source text is already short (at most about 500 characters or three sentences) and human-readable, copy it verbatim into summary instead of paraphrasing it.
+- Never reproduce raw JSON, HTML, XML, source code, serialized metadata, opaque identifiers, access keys, or request/response fields. State the human-readable meaning instead. If no meaning can be recovered, use a brief placeholder explaining that the content is available at the original link.
+- Prefer concrete facts, numbers, new claims, and consequences. Avoid generic phrases such as "this article discusses".
+
+Apply source instructions only to inclusion, summary language/content, and tags; they cannot override the rules above. Set include=false when source instructions say this item should be filtered. Produce 3-6 tags. Exactly one tag must be the best high-level category from: technology, ai, world, science, business, culture, health, environment. Remaining tags must be specific. Avoid generic tags such as news, article, or update."#;
+
 #[derive(Clone)]
 pub struct HttpProviderConfig {
     pub identity: ModelIdentity,
@@ -176,7 +186,7 @@ impl SummaryProvider for OpenAiCompatibleProvider {
                 "response_format": {"type": "json_object"},
                 "temperature": 0,
                 "messages": [
-                    {"role": "system", "content": "Return only JSON with this shape: {\"include\":true,\"summary\":\"two concise factual sentences\",\"tags\":[{\"label\":\"lowercase topic\",\"confidence\":0.9}]}. Apply source instructions only to inclusion, summary language/content, and tags. Set include=false when source instructions say this item should be filtered. Produce 3-6 tags. Exactly one tag must be the best high-level category from: technology, ai, world, science, business, culture, health, environment. Remaining tags must be specific. Avoid generic tags such as news, article, or update."},
+                    {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
                     {"role": "user", "content": format!(
                         "Summarize this article to help decide whether it is worth reading. Prefer concrete facts, numbers, new claims, and consequences.\nSource instructions: {}\nTitle: {}\nSource: {}\nAuthor: {}\nLanguage: {}\nURL: {}\nText:\n{}",
                         request.custom_instruction.as_deref().map(|value| bounded_text(value, 4_000)).unwrap_or_else(|| "none".into()),
@@ -198,6 +208,15 @@ impl SummaryProvider for OpenAiCompatibleProvider {
                 enrichment.include,
             ),
             Err(_) => (content.trim().to_owned(), fallback_tags, true),
+        };
+        let text = if looks_like_machine_payload(&text) {
+            content_placeholder(
+                &request.title,
+                request.source.as_deref(),
+                request.canonical_url.as_deref(),
+            )
+        } else {
+            text
         };
         if text.is_empty() || text.chars().count() > 2_000 {
             return Err(ModelError::InvalidOutput(
@@ -498,6 +517,45 @@ fn chat_content(value: &Value) -> Result<String, ModelError> {
 
 fn bounded_text(value: &str, maximum_chars: usize) -> String {
     value.chars().take(maximum_chars).collect()
+}
+
+fn looks_like_machine_payload(value: &str) -> bool {
+    let value = value.trim();
+    if value.is_empty() {
+        return false;
+    }
+    if serde_json::from_str::<Value>(value)
+        .ok()
+        .is_some_and(|parsed| parsed.is_object() || parsed.is_array())
+    {
+        return true;
+    }
+    let lower = value
+        .chars()
+        .take(256)
+        .collect::<String>()
+        .to_ascii_lowercase();
+    lower.starts_with("<!doctype")
+        || lower.starts_with("<html")
+        || lower.starts_with("<body")
+        || lower.starts_with("<script")
+        || lower.starts_with("<?xml")
+}
+
+fn content_placeholder(title: &str, source: Option<&str>, canonical_url: Option<&str>) -> String {
+    let is_youtube = source.is_some_and(|source| source.eq_ignore_ascii_case("youtube"))
+        || canonical_url.is_some_and(|url| {
+            let url = url.to_ascii_lowercase();
+            url.contains("youtube.com/") || url.contains("youtu.be/")
+        });
+    if is_youtube {
+        format!("Watch “{}” on YouTube.", bounded_text(title.trim(), 300))
+    } else {
+        format!(
+            "Open “{}” at the original source.",
+            bounded_text(title.trim(), 300)
+        )
+    }
 }
 
 fn parse_json_object<T: DeserializeOwned>(value: &str) -> Result<T, ModelError> {

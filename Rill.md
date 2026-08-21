@@ -47,7 +47,7 @@ The application must:
 - Learn content preference separately from source, curator, and publisher preference.
 - Support `Like`, `Dislike`, and `Favorite`.
 - Support configurable user actions triggered by application events.
-- Support user-defined tab-based streams such as `Home`, `Germany`, `AI`, `Software`, or `Science`.
+- Support user-defined tab-based streams such as `Germany`, `AI`, `Software`, or `Science`, alongside built-in `All`.
 - Provide a modern hydrated interface for phones and computers.
 - Provide a much simpler e-reader interface that works without JavaScript.
 - Support multiple users, roles, sessions, reader devices, and device revocation.
@@ -2096,6 +2096,13 @@ The summary should answer:
 
 Target approximately two concise sentences.
 
+Use one common content policy for every source:
+
+- preserve the source language unless source instructions explicitly request translation
+- keep already-short, readable source text verbatim instead of degrading it through paraphrase
+- never expose raw JSON, HTML, XML, serialized metadata, opaque identifiers, or access keys
+- state the human-readable meaning of machine content, or use a brief original-link placeholder when no meaning can be recovered
+
 Prefer:
 
 - concrete facts
@@ -2383,7 +2390,7 @@ Streams are first-class user-defined views over the available story pool.
 Examples:
 
 ```text
-Home
+All
 Germany
 AI
 Software
@@ -2420,7 +2427,7 @@ created_at
 updated_at
 ```
 
-`Home` is the built-in general personalized stream.
+`All` is the built-in complete stream.
 
 Users may create arbitrary additional streams.
 
@@ -3097,13 +3104,13 @@ Do not put the entire admin application into the initial feed bundle.
 Primary modern navigation:
 
 ```text
-Home   Germany   AI   Software   +
+All   Germany   AI   Software   +
 ```
 
 Each stream has a stable route:
 
 ```text
-/stream/home
+/stream/all
 /stream/germany
 /stream/ai
 ```
@@ -3198,7 +3205,7 @@ Use normal HTML forms and HTTP 303 redirects.
 Reader stream navigation may be:
 
 ```text
-Home | Germany | AI | Software
+All | Germany | AI | Software
 ```
 
 or an equivalent narrow-screen layout.

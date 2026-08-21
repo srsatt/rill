@@ -543,7 +543,7 @@ mod tests {
         );
 
         let feed = intelligence
-            .rank_stream(&user_id, "home", 20, "test")
+            .rank_stream(&user_id, "all", 20, "test")
             .await
             .unwrap();
         assert_eq!(feed.len(), 1);
@@ -623,7 +623,7 @@ mod tests {
         }
         assert!(intelligence.refit_preference_model(&user_id).unwrap());
         let feed = intelligence
-            .rank_stream(&user_id, "home", 20, "test")
+            .rank_stream(&user_id, "all", 20, "test")
             .await
             .unwrap();
         assert_eq!(feed[0].explanation["fallback"], false);
@@ -674,14 +674,14 @@ mod tests {
         })
         .unwrap();
         let feed = intelligence
-            .rank_stream(&user_id, "home", 20, "test")
+            .rank_stream(&user_id, "all", 20, "test")
             .await
             .unwrap();
         assert_eq!(feed[0].explanation["fallback"], true);
     }
 
     #[tokio::test]
-    async fn recommendation_cache_is_reused_and_feedback_invalidates_it() {
+    async fn recommendation_cache_is_reused_and_candidate_changes_invalidate_it() {
         let (pool, intelligence, user_id, document_id) = service();
         let story_id: String = pool
             .with_connection(|connection| {
@@ -694,11 +694,11 @@ mod tests {
             .unwrap();
 
         intelligence
-            .rank_stream(&user_id, "home", 20, "test")
+            .rank_stream(&user_id, "all", 20, "test")
             .await
             .unwrap();
         intelligence
-            .rank_stream(&user_id, "home", 20, "test")
+            .rank_stream(&user_id, "all", 20, "test")
             .await
             .unwrap();
         let runs: i64 = pool
@@ -710,11 +710,39 @@ mod tests {
             .unwrap();
         assert_eq!(runs, 1);
 
+        let added = DedupService::new(pool.clone())
+            .upsert_document(
+                &variant_fixture(
+                    "public",
+                    "second.example",
+                    "A second independent story",
+                    "https://second.example/article",
+                ),
+                &CuratorProvenance {
+                    curator_kind: "source".into(),
+                    curator_id: "second-feed".into(),
+                    source_instance_id: None,
+                    raw_item_id: None,
+                    collection_entry_id: None,
+                },
+            )
+            .unwrap();
+        let refreshed = intelligence
+            .rank_stream(&user_id, "all", 20, "test")
+            .await
+            .unwrap();
+        assert_eq!(refreshed.len(), 2);
+        assert!(
+            refreshed
+                .iter()
+                .any(|story| story.document_id == added.document_id)
+        );
+
         intelligence
             .record_feedback(&user_id, &story_id, FeedbackKind::Like, "test")
             .unwrap();
         intelligence
-            .rank_stream(&user_id, "home", 20, "test")
+            .rank_stream(&user_id, "all", 20, "test")
             .await
             .unwrap();
         let runs: i64 = pool
@@ -730,7 +758,7 @@ mod tests {
     #[tokio::test]
     async fn streams_can_be_updated_reordered_and_deleted() {
         let (_, intelligence, user_id, _) = service();
-        intelligence.ensure_home_stream(&user_id).unwrap();
+        intelligence.ensure_default_streams(&user_id).unwrap();
         intelligence
             .create_stream(
                 &user_id,
@@ -779,8 +807,7 @@ mod tests {
         invalid.swap(0, 1);
         assert!(intelligence.reorder_streams(&user_id, &invalid).is_err());
         intelligence.delete_stream(&user_id, "local-ai").unwrap();
-        assert_eq!(intelligence.list_streams(&user_id).unwrap().len(), 6);
-        assert!(intelligence.delete_stream(&user_id, "home").is_err());
+        assert_eq!(intelligence.list_streams(&user_id).unwrap().len(), 5);
         assert!(intelligence.delete_stream(&user_id, "all").is_err());
     }
 
@@ -793,9 +820,9 @@ mod tests {
                 .iter()
                 .map(|stream| stream.slug.as_str())
                 .collect::<Vec<_>>(),
-            ["all", "home", "technology", "ai", "world", "science"]
+            ["all", "technology", "ai", "world", "science"]
         );
-        assert_eq!(intelligence.list_streams(&user_id).unwrap().len(), 6);
+        assert_eq!(intelligence.list_streams(&user_id).unwrap().len(), 5);
         let queued: i64 = pool
             .with_connection(|connection| {
                 connection.query_row(
@@ -805,7 +832,7 @@ mod tests {
                 )
             })
             .unwrap();
-        assert_eq!(queued, 6);
+        assert_eq!(queued, 5);
     }
 
     #[tokio::test]
@@ -885,7 +912,7 @@ mod tests {
         assert_eq!(detail.coverage_count, 2);
         assert_eq!(detail.representative.document_id, second.document_id);
         assert_eq!(
-            service.rank_stream_now(&user_id, "home", 20, "test").unwrap()[0].document_id,
+            service.rank_stream_now(&user_id, "all", 20, "test").unwrap()[0].document_id,
             second.document_id
         );
         assert!(
@@ -917,7 +944,7 @@ mod tests {
             first_document_id
         );
         assert_eq!(
-            service.rank_stream_now(&user_id, "home", 20, "test").unwrap()[0].document_id,
+            service.rank_stream_now(&user_id, "all", 20, "test").unwrap()[0].document_id,
             first_document_id
         );
     }

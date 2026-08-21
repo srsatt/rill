@@ -31,7 +31,7 @@ export function ReaderSettings(props: { page: ReaderSettingsPageModel; csrfToken
                 <option value="exclusive">Assign to the first matching subject stream</option>
               </select>
             </label>
-            <p class="field-help">Home and All always remain complete views.</p>
+            <p class="field-help">All always remains a complete view.</p>
           </div>
           <div class="settings-field-group">
             <label>Typography
