@@ -401,8 +401,13 @@ test("admin sections and model tasks use tabs", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Model providers" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Ranking" })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "Embedding" }).click();
-  await expect(page.getByRole("heading", { name: "Embedding model" })).toBeVisible();
-  const actions = page.locator(".model-form-actions");
+  const embeddingPanel = page.locator('[data-model-panel="embedding"]');
+  await expect(embeddingPanel.getByRole("heading", { name: "Embedding model" })).toBeVisible();
+  await expect(embeddingPanel.getByText(/Connection managed by deployment/)).toBeVisible();
+  await expect(embeddingPanel.getByLabel("Base URL")).toHaveCount(0);
+  await expect(embeddingPanel.getByLabel("Provider identifier")).toHaveCount(0);
+  await expect(embeddingPanel.getByLabel("Model")).toBeEditable();
+  const actions = embeddingPanel.locator(".model-form-actions");
   const buttons = actions.getByRole("button");
   await expect(buttons).toHaveCount(3);
   const tops = await buttons.evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));

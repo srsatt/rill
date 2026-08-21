@@ -30,6 +30,8 @@ interface ModelSettingView {
   version: string;
   baseUrl: string | null;
   apiKeyConfigured: boolean;
+  connectionManaged: boolean;
+  overridden: boolean;
 }
 
 interface TelegramBotView {
@@ -140,7 +142,10 @@ function modelSettingCard(setting: ModelSettingView, reload: () => Promise<void>
   const card = node("article");
   card.className = "admin-card model-setting-card";
   const heading = node("h3", title);
-  const status = node("p", `${setting.mode} · ${setting.provider}/${setting.model} · ${setting.version}${setting.apiKeyConfigured ? " · API key stored" : " · no API key"}`);
+  const connectionStatus = setting.connectionManaged
+    ? " · deployment connection"
+    : setting.apiKeyConfigured ? " · API key stored" : " · no API key";
+  const status = node("p", `${setting.mode} · ${setting.provider}/${setting.model} · ${setting.version}${connectionStatus}`);
   card.append(heading, status);
 
   const form = node("form");
@@ -177,6 +182,7 @@ function modelSettingCard(setting: ModelSettingView, reload: () => Promise<void>
   const baseUrl = field("Base URL", "baseUrl", setting.baseUrl ?? presets[activePreset ?? "custom"][1], "url");
   const provider = field("Provider identifier", "provider", setting.provider);
   const model = field("Model", "model", setting.model);
+  const version = field("Version", "version", setting.version);
   const defaults = {
     embedding: { openai: "text-embedding-3-small", claude: "voyage-3", gemini: "text-embedding-004", ollama: "nomic-embed-text" },
     ranking: { openai: "gpt-4.1-mini", claude: "claude-sonnet-4-5", gemini: "gemini-2.5-flash", ollama: "qwen3" },
@@ -191,14 +197,13 @@ function modelSettingCard(setting: ModelSettingView, reload: () => Promise<void>
     if (baseInput) baseInput.value = presets[choice][1];
     if (modelInput && choice !== "custom") modelInput.value = defaults[setting.slot][choice];
   });
-  form.append(
-    presetLabel,
-    baseUrl,
-    provider,
-    model,
-    field("Version", "version", setting.version),
-    field("API token", "apiKey", "", "password"),
-  );
+  if (setting.connectionManaged) {
+    const connection = node("p", `Connection managed by deployment · ${setting.provider} · ${setting.baseUrl ?? "local"}`);
+    connection.className = "section-description";
+    form.append(connection, model, version);
+  } else {
+    form.append(presetLabel, baseUrl, provider, model, version, field("API token", "apiKey", "", "password"));
+  }
   const clearLabel = node("label");
   clearLabel.className = "checkbox-label";
   const clear = node("input");
@@ -209,11 +214,15 @@ function modelSettingCard(setting: ModelSettingView, reload: () => Promise<void>
   const formBody = () => {
     const data = new FormData(form);
     const body: Record<string, unknown> = {
-      baseUrl: data.get("baseUrl"), provider: data.get("provider"), model: data.get("model"),
-      version: data.get("version"), clearApiKey: data.get("clearApiKey") === "on",
+      model: data.get("model"), version: data.get("version"),
     };
-    const apiKey = String(data.get("apiKey") ?? "");
-    if (apiKey) body.apiKey = apiKey;
+    if (!setting.connectionManaged) {
+      body.baseUrl = data.get("baseUrl");
+      body.provider = data.get("provider");
+      body.clearApiKey = data.get("clearApiKey") === "on";
+      const apiKey = String(data.get("apiKey") ?? "");
+      if (apiKey) body.apiKey = apiKey;
+    }
     return body;
   };
   const actions = node("div"); actions.className = "model-form-actions";
@@ -236,11 +245,13 @@ function modelSettingCard(setting: ModelSettingView, reload: () => Promise<void>
   const reset = node("button", `Reset ${title.toLowerCase()}`);
   reset.type = "button";
   reset.className = "secondary-action";
+  reset.disabled = !setting.overridden;
   reset.addEventListener("click", async () => {
     if (await mutate(`/api/v1/admin/settings/models/${setting.slot}`, { method: "DELETE" }, `${title} could not be reset.`)) await reload();
   });
   actions.append(test, save, reset, testStatus);
-  form.append(clearLabel, actions);
+  if (!setting.connectionManaged) form.append(clearLabel);
+  form.append(actions);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (await mutate(`/api/v1/admin/settings/models/${setting.slot}`, {

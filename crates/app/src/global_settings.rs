@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, bail};
-use rill_config::HttpModelSettings;
+use rill_config::{HttpModelSettings, ModelSettings};
 use rill_db::DbPool;
 use rill_model_api::{EmbeddingProvider, RecommendationProvider, SummaryProvider};
 use rill_secrets::SecretStore;
@@ -17,13 +17,16 @@ pub(crate) struct GlobalSettingsService {
     pool: DbPool,
     secrets: Option<SecretStore>,
     models: RuntimeModelRegistry,
+    configured_models: ModelSettings,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ModelSettingInput {
-    pub base_url: String,
-    pub provider: String,
+    #[serde(default)]
+    pub base_url: Option<String>,
+    #[serde(default)]
+    pub provider: Option<String>,
     pub model: String,
     #[serde(default = "default_version")]
     pub version: String,
@@ -43,11 +46,42 @@ pub(crate) struct ModelSettingView {
     pub version: String,
     pub base_url: Option<String>,
     pub api_key_configured: bool,
+    pub connection_managed: bool,
+    pub overridden: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum StoredModelConfig {
+    ModelOverride {
+        model: String,
+        version: String,
+    },
+    ProviderOverride {
+        #[serde(flatten)]
+        provider: StoredProviderConfig,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct StoredModelConfig {
+struct StoredProviderConfig {
+    base_url: String,
+    provider: String,
+    model: String,
+    version: String,
+    timeout_seconds: u64,
+    maximum_request_bytes: usize,
+    maximum_response_bytes: usize,
+    maximum_batch_items: usize,
+    retries: usize,
+    circuit_failure_threshold: u32,
+    circuit_cooldown_seconds: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LegacyStoredModelConfig {
     base_url: String,
     provider: String,
     model: String,
@@ -62,19 +96,31 @@ struct StoredModelConfig {
 }
 
 impl GlobalSettingsService {
-    pub fn new(pool: DbPool, secrets: Option<SecretStore>, models: RuntimeModelRegistry) -> Self {
+    pub fn new(
+        pool: DbPool,
+        secrets: Option<SecretStore>,
+        models: RuntimeModelRegistry,
+        configured_models: ModelSettings,
+    ) -> Self {
         Self {
             pool,
             secrets,
             models,
+            configured_models,
         }
     }
 
     pub fn apply_persisted_models(&self) -> Result<()> {
         for slot in MODEL_SLOTS {
             if let Some((config, secret_id)) = self.load_model(slot)? {
-                let api_key = self.read_secret(secret_id.as_deref())?;
-                self.apply_model(slot, Some(&config.as_http_settings()), api_key)?;
+                let configured = self.configured_model(slot);
+                let settings = config.as_http_settings(configured)?;
+                let api_key = if configured.is_some() {
+                    None
+                } else {
+                    self.read_secret(secret_id.as_deref())?
+                };
+                self.apply_model(slot, Some(&settings), api_key)?;
             }
         }
         Ok(())
@@ -86,14 +132,40 @@ impl GlobalSettingsService {
             .map(|slot| {
                 let stored = self.load_model(slot)?;
                 if let Some((config, secret_id)) = stored {
+                    let configured = self.configured_model(slot);
+                    let settings = config.as_http_settings(configured)?;
+                    let connection_managed = configured.is_some();
                     Ok(ModelSettingView {
                         slot: slot.into(),
-                        mode: "http".into(),
-                        provider: config.provider,
-                        model: config.model,
-                        version: config.version,
-                        base_url: Some(config.base_url),
-                        api_key_configured: secret_id.is_some(),
+                        mode: if connection_managed {
+                            "override"
+                        } else {
+                            "http"
+                        }
+                        .into(),
+                        provider: settings.provider,
+                        model: settings.model,
+                        version: settings.version,
+                        base_url: Some(settings.base_url),
+                        api_key_configured: if connection_managed {
+                            configured.is_some_and(|value| value.api_key_env.is_some())
+                        } else {
+                            secret_id.is_some()
+                        },
+                        connection_managed,
+                        overridden: true,
+                    })
+                } else if let Some(configured) = self.configured_model(slot) {
+                    Ok(ModelSettingView {
+                        slot: slot.into(),
+                        mode: "configured".into(),
+                        provider: configured.provider.clone(),
+                        model: configured.model.clone(),
+                        version: configured.version.clone(),
+                        base_url: Some(configured.base_url.clone()),
+                        api_key_configured: configured.api_key_env.is_some(),
+                        connection_managed: true,
+                        overridden: false,
                     })
                 } else {
                     let identity = match slot {
@@ -110,6 +182,8 @@ impl GlobalSettingsService {
                         version: identity.version,
                         base_url: None,
                         api_key_configured: false,
+                        connection_managed: false,
+                        overridden: false,
                     })
                 }
             })
@@ -125,8 +199,15 @@ impl GlobalSettingsService {
         api_key: Option<&str>,
     ) -> Result<ModelSettingView> {
         validate_slot(slot)?;
-        let stored = StoredModelConfig::from_input(input)?;
-        let settings = stored.as_http_settings();
+        let configured = self.configured_model(slot);
+        let connection_managed = configured.is_some();
+        if connection_managed
+            && (api_key.is_some_and(|value| !value.is_empty()) || input.clear_api_key)
+        {
+            bail!("deployment-managed model connection cannot change API keys");
+        }
+        let stored = StoredModelConfig::from_input(input, configured)?;
+        let settings = stored.as_http_settings(configured)?;
         let previous_secret: Option<String> = self.pool.with_connection(|connection| {
             connection
                 .query_row(
@@ -138,14 +219,18 @@ impl GlobalSettingsService {
                 .optional()
                 .map(|value| value.flatten())
         })?;
-        let retained_key = if api_key.is_none() && !input.clear_api_key {
+        let retained_key = if connection_managed {
+            None
+        } else if api_key.is_none() && !input.clear_api_key {
             self.read_secret(previous_secret.as_deref())?
         } else {
             api_key.map(str::to_owned)
         };
         self.validate_model(slot, &settings, retained_key.clone())?;
 
-        let new_secret = if let Some(value) = api_key.filter(|value| !value.is_empty()) {
+        let new_secret = if connection_managed {
+            None
+        } else if let Some(value) = api_key.filter(|value| !value.is_empty()) {
             let store = self
                 .secrets
                 .as_ref()
@@ -248,7 +333,7 @@ impl GlobalSettingsService {
         if let (Some(store), Some(secret_id)) = (&self.secrets, secret_id) {
             let _ = store.delete(&secret_id);
         }
-        self.apply_model(slot, None, None)?;
+        self.apply_model(slot, self.configured_model(slot), None)?;
         if slot == "ranking" {
             self.invalidate_rankings()?;
         }
@@ -262,8 +347,15 @@ impl GlobalSettingsService {
         api_key: Option<&str>,
     ) -> Result<RuntimeModelRegistry> {
         validate_slot(slot)?;
-        let settings = StoredModelConfig::from_input(input)?.as_http_settings();
-        let retained_key = if input.clear_api_key {
+        let configured = self.configured_model(slot);
+        if configured.is_some()
+            && (api_key.is_some_and(|value| !value.is_empty()) || input.clear_api_key)
+        {
+            bail!("deployment-managed model connection cannot change API keys");
+        }
+        let settings =
+            StoredModelConfig::from_input(input, configured)?.as_http_settings(configured)?;
+        let retained_key = if configured.is_some() || input.clear_api_key {
             None
         } else if api_key.is_some_and(|value| !value.is_empty()) {
             api_key.map(str::to_owned)
@@ -294,8 +386,21 @@ impl GlobalSettingsService {
                 )
                 .optional()
         })?;
-        raw.map(|(config, secret)| Ok((serde_json::from_str(&config)?, secret)))
+        raw.map(|(config, secret)| Ok((StoredModelConfig::from_json(&config)?, secret)))
             .transpose()
+    }
+
+    fn configured_model(&self, slot: &str) -> Option<&HttpModelSettings> {
+        match slot {
+            "embedding" => self.configured_models.embedding.as_ref(),
+            "ranking" => self.configured_models.recommendation.as_ref(),
+            "text_parse" => self
+                .configured_models
+                .collection_parser
+                .as_ref()
+                .or(self.configured_models.summary.as_ref()),
+            _ => None,
+        }
     }
 
     fn read_secret(&self, secret_id: Option<&str>) -> Result<Option<String>> {
@@ -347,8 +452,65 @@ impl GlobalSettingsService {
 }
 
 impl StoredModelConfig {
+    fn from_input(
+        input: &ModelSettingInput,
+        configured: Option<&HttpModelSettings>,
+    ) -> Result<Self> {
+        validate_identity(&input.model, &input.version)?;
+        if configured.is_some() {
+            return Ok(Self::ModelOverride {
+                model: input.model.trim().into(),
+                version: input.version.trim().into(),
+            });
+        }
+        Ok(Self::ProviderOverride {
+            provider: StoredProviderConfig::from_input(input)?,
+        })
+    }
+
+    fn from_json(value: &str) -> Result<Self> {
+        match serde_json::from_str(value) {
+            Ok(config) => Ok(config),
+            Err(current_error) => match serde_json::from_str::<LegacyStoredModelConfig>(value) {
+                Ok(legacy) => Ok(Self::ProviderOverride {
+                    provider: legacy.into(),
+                }),
+                Err(_) => Err(current_error.into()),
+            },
+        }
+    }
+
+    fn as_http_settings(
+        &self,
+        configured: Option<&HttpModelSettings>,
+    ) -> Result<HttpModelSettings> {
+        let (model, version) = match self {
+            Self::ModelOverride { model, version } => (model, version),
+            Self::ProviderOverride { provider } => (&provider.model, &provider.version),
+        };
+        if let Some(configured) = configured {
+            let mut effective = configured.clone();
+            effective.model.clone_from(model);
+            effective.version.clone_from(version);
+            return Ok(effective);
+        }
+        match self {
+            Self::ProviderOverride { provider } => Ok(provider.as_http_settings()),
+            Self::ModelOverride { .. } => {
+                bail!("model override requires a deployment-managed provider connection")
+            }
+        }
+    }
+}
+
+impl StoredProviderConfig {
     fn from_input(input: &ModelSettingInput) -> Result<Self> {
-        let url = Url::parse(input.base_url.trim()).context("model URL is invalid")?;
+        let base_url = input.base_url.as_deref().context("model URL is required")?;
+        let provider = input
+            .provider
+            .as_deref()
+            .context("model provider is required")?;
+        let url = Url::parse(base_url.trim()).context("model URL is invalid")?;
         if !matches!(url.scheme(), "http" | "https")
             || url.host_str().is_none()
             || !url.username().is_empty()
@@ -358,18 +520,12 @@ impl StoredModelConfig {
         {
             bail!("model URL must be absolute HTTP(S) without credentials, query, or fragment");
         }
-        for (name, value) in [
-            ("provider", input.provider.trim()),
-            ("model", input.model.trim()),
-            ("version", input.version.trim()),
-        ] {
-            if value.is_empty() || value.len() > 160 {
-                bail!("model {name} is invalid");
-            }
+        if provider.trim().is_empty() || provider.trim().len() > 160 {
+            bail!("model provider is invalid");
         }
         Ok(Self {
             base_url: url.to_string(),
-            provider: input.provider.trim().into(),
+            provider: provider.trim().into(),
             model: input.model.trim().into(),
             version: input.version.trim().into(),
             timeout_seconds: 30,
@@ -399,6 +555,33 @@ impl StoredModelConfig {
             circuit_cooldown_seconds: self.circuit_cooldown_seconds,
         }
     }
+}
+
+impl From<LegacyStoredModelConfig> for StoredProviderConfig {
+    fn from(value: LegacyStoredModelConfig) -> Self {
+        Self {
+            base_url: value.base_url,
+            provider: value.provider,
+            model: value.model,
+            version: value.version,
+            timeout_seconds: value.timeout_seconds,
+            maximum_request_bytes: value.maximum_request_bytes,
+            maximum_response_bytes: value.maximum_response_bytes,
+            maximum_batch_items: value.maximum_batch_items,
+            retries: value.retries,
+            circuit_failure_threshold: value.circuit_failure_threshold,
+            circuit_cooldown_seconds: value.circuit_cooldown_seconds,
+        }
+    }
+}
+
+fn validate_identity(model: &str, version: &str) -> Result<()> {
+    for (name, value) in [("model", model.trim()), ("version", version.trim())] {
+        if value.is_empty() || value.len() > 160 {
+            bail!("model {name} is invalid");
+        }
+    }
+    Ok(())
 }
 
 fn validate_slot(slot: &str) -> Result<()> {
@@ -438,10 +621,15 @@ mod tests {
         let secrets = SecretStore::from_base64(pool.clone(), &key, 1).unwrap();
         let models =
             RuntimeModelRegistry::from_settings(&rill_config::Settings::default()).unwrap();
-        let service = GlobalSettingsService::new(pool.clone(), Some(secrets), models.clone());
+        let service = GlobalSettingsService::new(
+            pool.clone(),
+            Some(secrets),
+            models.clone(),
+            ModelSettings::default(),
+        );
         let input = ModelSettingInput {
-            base_url: "https://models.example/rill/".into(),
-            provider: "example".into(),
+            base_url: Some("https://models.example/rill/".into()),
+            provider: Some("example".into()),
             model: "rank-v1".into(),
             version: "2026-08".into(),
             api_key: None,
@@ -480,5 +668,91 @@ mod tests {
 
         service.delete_model("admin", "session", "ranking").unwrap();
         assert_eq!(models.ranking.identity().provider, "rill-local");
+    }
+
+    #[test]
+    fn managed_model_override_preserves_connection_and_reset_restores_configured_model() {
+        let pool = DbPool::open_in_memory().unwrap();
+        pool.with_connection(|connection| {
+            connection.execute(
+                "INSERT INTO users(id, username, role) VALUES ('admin', 'admin', 'admin')",
+                [],
+            )
+        })
+        .unwrap();
+        let configured = HttpModelSettings {
+            base_url: "https://models.example/v1/".into(),
+            provider: "openai-compatible".into(),
+            model: "fleet-model".into(),
+            version: "fleet-pinned".into(),
+            ca_certificate_path: Some("/etc/rill/private-model-ca.crt".into()),
+            timeout_seconds: 47,
+            ..HttpModelSettings::default()
+        };
+        let input = ModelSettingInput {
+            base_url: None,
+            provider: None,
+            model: "ui-model".into(),
+            version: "ui-selected".into(),
+            api_key: None,
+            clear_api_key: false,
+        };
+        let stored = StoredModelConfig::from_input(&input, Some(&configured)).unwrap();
+        let effective = stored.as_http_settings(Some(&configured)).unwrap();
+        assert_eq!(effective.base_url, configured.base_url);
+        assert_eq!(effective.provider, configured.provider);
+        assert_eq!(
+            effective.ca_certificate_path,
+            configured.ca_certificate_path
+        );
+        assert_eq!(effective.timeout_seconds, 47);
+        assert_eq!(effective.model, "ui-model");
+        let json = serde_json::to_string(&stored).unwrap();
+        assert!(!json.contains("baseUrl"));
+        assert!(!json.contains("private-model-ca"));
+
+        let legacy = serde_json::json!({
+            "baseUrl": "https://stale.example/v1/",
+            "provider": "stale-provider",
+            "model": "legacy-ui-model",
+            "version": "legacy-ui-selected",
+            "timeoutSeconds": 30,
+            "maximumRequestBytes": 524288,
+            "maximumResponseBytes": 4194304,
+            "maximumBatchItems": 128,
+            "retries": 2,
+            "circuitFailureThreshold": 3,
+            "circuitCooldownSeconds": 30
+        })
+        .to_string();
+        let legacy_effective = StoredModelConfig::from_json(&legacy)
+            .unwrap()
+            .as_http_settings(Some(&configured))
+            .unwrap();
+        assert_eq!(legacy_effective.base_url, configured.base_url);
+        assert_eq!(legacy_effective.provider, configured.provider);
+        assert_eq!(
+            legacy_effective.ca_certificate_path,
+            configured.ca_certificate_path
+        );
+        assert_eq!(legacy_effective.model, "legacy-ui-model");
+
+        let mut runtime_settings = rill_config::Settings::default();
+        runtime_settings.models.recommendation = Some(HttpModelSettings {
+            ca_certificate_path: None,
+            ..configured.clone()
+        });
+        let models = RuntimeModelRegistry::from_settings(&runtime_settings).unwrap();
+        let service =
+            GlobalSettingsService::new(pool, None, models.clone(), runtime_settings.models.clone());
+        let view = service
+            .put_model("admin", "session", "ranking", &input, None)
+            .unwrap();
+        assert!(view.connection_managed);
+        assert!(view.overridden);
+        assert_eq!(models.ranking.identity().model, "ui-model");
+
+        service.delete_model("admin", "session", "ranking").unwrap();
+        assert_eq!(models.ranking.identity().model, "fleet-model");
     }
 }

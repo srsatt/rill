@@ -100,8 +100,9 @@ rill --config config.toml plugins inspect ./source-plugin.wasm
 
 The built-in local feature-hash embedding, extractive summary, and ranker make
 the product usable offline. External recommendation providers are optional and
-fall back to local ranking on failure. Admins can swap embedding, ranking, and
-text-parse HTTP providers live from global settings.
+fall back to local ranking on failure. Admins can change embedding, ranking,
+and text-parse models live while deployment-managed provider connections keep
+their URL, credentials, trust anchors, and limits.
 
 ## Verification
 

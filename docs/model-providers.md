@@ -43,13 +43,19 @@ client. Use it for a private model gateway without changing system trust.
 
 The admin global-settings page manages three live slots: `embedding`, `ranking`,
 and `text_parse`. The text-parse slot powers both summaries and collection
-parsing. Nonsecret config lives in SQLite; optional API keys use encrypted
-secret storage and are never returned. TOML remains the startup default until a
-global slot is saved.
+parsing. When TOML configures a slot, deployment remains the owner of its URL,
+provider kind, API-key environment variable, CA certificate, request limits,
+retry policy, and circuit breaker. The admin page can override only the model
+and version; SQLite stores only that identity. Reset removes the identity
+override and immediately restores the TOML model. A later deployment can change
+connection details without erasing the selected model.
 
-The admin UI provides OpenAI, Claude, Gemini, Ollama, and custom
-OpenAI-compatible presets, one encrypted token field, and a live health test
-before saving each slot.
+When TOML does not configure a slot, the admin UI can create the complete HTTP
+connection instead. It provides OpenAI, Claude, Gemini, Ollama, and custom
+OpenAI-compatible presets, one encrypted token field, and a live health test.
+API keys use encrypted secret storage and are never returned. Existing complete
+overrides automatically inherit a newly deployment-managed connection while
+retaining their model identity.
 
 The development config uses Ollama `embeddinggemma:latest` for embeddings and
 `gemma4:e4b` for enrichment, collection parsing, and ranking.

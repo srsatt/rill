@@ -171,7 +171,12 @@ pub async fn serve(settings: Settings, pool: DbPool) -> Result<()> {
         .ok()
         .map(|key| SecretStore::from_base64(pool.clone(), &key, settings.secrets.key_version))
         .transpose()?;
-    let global_settings = GlobalSettingsService::new(pool.clone(), secrets.clone(), models.clone());
+    let global_settings = GlobalSettingsService::new(
+        pool.clone(),
+        secrets.clone(),
+        models.clone(),
+        settings.models.clone(),
+    );
     global_settings.apply_persisted_models()?;
     let email_gateway: Option<Arc<dyn EmailGateway>> = secrets.clone().map(|secrets| {
         Arc::new(ImapEmailGateway::new(
